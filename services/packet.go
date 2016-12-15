@@ -20,14 +20,16 @@ type Handlers struct {
 
 // StoreHandler is a request handler that knows about storage
 type StoreHandler struct {
-	path     string
-	store    *freefall.Store
-	value    *freefall.StoreData
-	unmerged cmap.ConcurrentMap
-	mapper   func(*freefall.Record) *freefall.StoreData
-	folder   func(*freefall.StoreData, *freefall.StoreData) *freefall.StoreData
-	bytemap  *freefall.Bytemap
-	updates  chan Update
+	path           string
+	store          *freefall.Store
+	value          *freefall.StoreData
+	unmerged       cmap.ConcurrentMap
+	mapper         func(*freefall.Record) *freefall.StoreData
+	folder         func(*freefall.StoreData, *freefall.StoreData) *freefall.StoreData
+	bytemap        *freefall.Bytemap
+	updates        chan Update
+	handleChannel  chan []byte
+	processChannel chan *freefall.Record
 }
 
 type PacketService struct {
@@ -81,7 +83,10 @@ func (self Handlers) Load(name string) *StoreHandler {
 			return nil
 		}
 
-		handler := &StoreHandler{path: name, store: store, value: nil, unmerged: cmap.New(), mapper: self.mapper, folder: self.folder, bytemap: bytemap, updates: self.updates}
+		handleChannel := make(chan []byte)
+		processChannel := make(chan *freefall.Record)
+
+		handler := &StoreHandler{path: name, store: store, value: nil, unmerged: cmap.New(), mapper: self.mapper, folder: self.folder, bytemap: bytemap, updates: self.updates, handleChannel: handleChannel, processChannel: processChannel}
 		handler.Init()
 		self.handlers[name] = handler
 		return handler
@@ -114,7 +119,8 @@ func (self Handlers) Handle(request []byte) []byte {
 
 		handler := self.Load(name)
 		if handler != nil {
-			return handler.Handle(packet.Payload)
+			handler.handleChannel <- packet.Payload
+			return []byte("success")
 		} else {
 			fmt.Println("Could not load handler for", name)
 			return []byte("success")
@@ -132,7 +138,21 @@ func (self *StoreHandler) Init() {
 	fmt.Println("Loading")
 	self.Load()
 	fmt.Println("Processing")
-	self.store.FromIndexDo(self.value.Last, self.Process)
+	go self.HandleChannel(self.handleChannel)
+	go self.ProcessChannel(self.processChannel)
+	self.store.FromIndexDo(self.value.Last, self.processChannel)
+}
+
+func (self *StoreHandler) HandleChannel(ch chan []byte) {
+	for request := range ch {
+		self.Handle(request)
+	}
+}
+
+func (self *StoreHandler) ProcessChannel(ch chan *freefall.Record) {
+	for request := range ch {
+		self.Process(request)
+	}
 }
 
 // Handle handles requests
@@ -142,7 +162,7 @@ func (self *StoreHandler) Handle(request []byte) []byte {
 	if err != nil {
 		fmt.Println("Error getting new record", err)
 	} else {
-		go self.Process(record)
+		self.processChannel <- record
 	}
 
 	return []byte("success")
