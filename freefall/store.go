@@ -217,14 +217,14 @@ func (self *Store) AddIndex(index int64, offset int64, length int64) {
 	self.outindex.Sync()
 }
 
-func (self *Store) FromIndexDo(index int64, handle func(*Record)) {
+func (self *Store) FromIndexDo(index int64, channel chan *Record) {
 	for current := index + 1; current <= self.LastIndex(); current++ {
 		record, err := self.GetRecord(current)
 		if err != nil {
 			fmt.Println("Error processing records")
 			fmt.Println(err)
 		} else {
-			go handle(record)
+			channel <- record
 		}
 	}
 }
