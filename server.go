@@ -14,14 +14,17 @@ func main() {
 
 	fmt.Println("*** INIT")
 
-	packet := services.NewPacketService("tcp://localhost:4567", updates)
+	train := services.NewTrainPacketService("tcp://localhost:4567", updates)
+	//	test := services.NewTestPacketService("tcp://localhost:4569", updates)
 	fmt.Println("2")
-	rule := services.NewRuleService("tcp://localhost:4568", updates)
+	//	rule := services.NewRuleService("tcp://localhost:4568", updates)
 
 	fmt.Println("*** RUN")
 
-	go packet.Run()
-	rule.Run()
+	train.Run()
+	//	go train.Run()
+	//	go test.Run()
+	//	rule.Run()
 
 	fmt.Println("*** FINISHED")
 }
