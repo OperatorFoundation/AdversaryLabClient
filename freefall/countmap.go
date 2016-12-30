@@ -12,13 +12,6 @@ type Countmap struct {
 	Updates chan *RuleCandidate
 }
 
-const int64Size = 8
-const cellsize = int64(int64Size * 2)
-const headerSize = cellsize * 2
-
-const indexHeaderOffset = 0
-const totalHeaderOffset = 1
-
 func NewCountmap(name string, updates chan *RuleCandidate) (*Countmap, error) {
 	bytemap, err := os.OpenFile("store/"+name+"/countmap", os.O_RDWR|os.O_CREATE, 0666)
 	if err != nil {
@@ -104,12 +97,26 @@ func (self *Countmap) candidate(index int64) *RuleCandidate {
 
 func (self *Countmap) keepBest(index int64) {
 	c := self.candidate(index)
+	if c.Score() == 0 {
+		return
+	}
+
 	if self.Best == nil {
 		self.Best = c
+		if Debug {
+			fmt.Println("First best rule.", self.Best, self.Best.rawScore())
+		} else {
+			fmt.Print("@")
+		}
 		self.Updates <- self.Best
 	} else {
 		if c.BetterThan(self.Best) {
 			self.Best = c
+			if Debug {
+				fmt.Println("New best rule!", self.Best, self.Best.rawScore())
+			} else {
+				fmt.Print("*")
+			}
 			self.Updates <- self.Best
 		}
 	}
