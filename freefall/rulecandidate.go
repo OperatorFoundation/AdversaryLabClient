@@ -18,11 +18,15 @@ func (self *RuleCandidate) Score() float64 {
 	return math.Abs(self.rawScore())
 }
 
-func (self *RuleCandidate) Rule() (bool, int64) {
-	return self.rawScore() > 0, self.Index
+func (self *RuleCandidate) RequireForbid() bool {
+	return self.rawScore() > 0
 }
 
 func (self *RuleCandidate) rawScore() float64 {
+	if self.AllowTotal < 3 || self.BlockTotal < 3 {
+		return 0
+	}
+
 	allow := float64(self.AllowCount) / float64(self.AllowTotal)
 	block := float64(self.BlockCount) / float64(self.BlockTotal)
 	return allow - block
