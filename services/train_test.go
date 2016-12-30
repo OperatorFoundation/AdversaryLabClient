@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"testing"
 
-	"github.com/blanu/AdversaryLab-protocol/adversarylab"
+	"github.com/OperatorFoundation/AdversaryLab-protocol/adversarylab"
 )
 
 func TestCountmap(t *testing.T) {

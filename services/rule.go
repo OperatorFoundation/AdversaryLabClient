@@ -9,8 +9,8 @@ import (
 
 	"github.com/ugorji/go/codec"
 
-	"github.com/blanu/AdversaryLab-nanomsg/freefall"
-	"github.com/blanu/AdversaryLab-protocol/adversarylab"
+	"github.com/OperatorFoundation/AdversaryLab-nanomsg/freefall"
+	"github.com/OperatorFoundation/AdversaryLab-protocol/adversarylab"
 )
 
 type RuleHandlers struct {

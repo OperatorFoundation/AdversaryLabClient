@@ -9,7 +9,7 @@ import (
 	"os"
 	"strconv"
 
-	"github.com/blanu/AdversaryLab-nanomsg/freefall"
+	"github.com/OperatorFoundation/AdversaryLab-nanomsg/freefall"
 
 	"golang.org/x/exp/mmap"
 )
