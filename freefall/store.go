@@ -1,13 +1,11 @@
 package freefall
 
 import (
-	"bytes"
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"io"
 	"os"
-
-	"golang.org/x/exp/mmap"
 )
 
 type Record struct {
@@ -16,64 +14,42 @@ type Record struct {
 }
 
 type Store struct {
-	index    *mmap.ReaderAt
-	content  *os.File
-	outindex *os.File
-	output   *os.File
-	last     int64
+	Path                   string
+	outindex               *os.File
+	output                 *os.File
+	last                   int64
+	expectedOutputLength   int64
+	expectedOutindexLength int64
 }
 
 func OpenStore(path string) (*Store, error) {
+	//	fmt.Println("OPEN STORE", path)
 	os.Mkdir("store", 0777)
 	os.Mkdir("store/"+path, 0777)
 
-	outindex, err := os.OpenFile("store/"+path+"/index", os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0666)
+	outindex, err := os.OpenFile("store/"+path+"/index", os.O_APPEND|os.O_RDWR|os.O_CREATE|os.O_SYNC, 0666)
+	if err != nil {
+		return nil, err
+	}
+	eoil, err := outindex.Seek(0, os.SEEK_END) // End of file
 	if err != nil {
 		return nil, err
 	}
 
-	output, err := os.OpenFile("store/"+path+"/source", os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0666)
-	if err != nil {
-		return nil, err
+	output, err2 := os.OpenFile("store/"+path+"/source", os.O_APPEND|os.O_RDWR|os.O_CREATE|os.O_SYNC, 0666)
+	if err2 != nil {
+		return nil, err2
+	}
+	eol, err3 := output.Seek(0, os.SEEK_END) // End of file
+	if err3 != nil {
+		fmt.Println("output seek failed", err3)
+		return nil, err3
 	}
 
-	reader, err := mmap.Open("store/" + path + "/index")
-	if err != nil {
-		return nil, err
-	}
-
-	file, err := os.Open("store/" + path + "/source")
-	if err != nil {
-		return nil, err
-	}
-
-	store := &Store{index: reader, content: file, outindex: outindex, output: output, last: -1}
-	fmt.Println("verifying", path)
+	store := &Store{Path: path, outindex: outindex, output: output, last: -1, expectedOutputLength: eol, expectedOutindexLength: eoil}
+	//	fmt.Println("verifying", path)
 	// FIXME - fix the problems that cause verification to fail
-	//	err = store.Verify()
-	err = nil
-
-	if err != nil {
-		return nil, err
-	} else {
-		return store, nil
-	}
-}
-
-func OpenReadonlyStore(path string) (*Store, error) {
-	reader, err := mmap.Open("store/" + path + "/index")
-	if err != nil {
-		return nil, err
-	}
-
-	file, err := os.Open("store/" + path + "/source")
-	if err != nil {
-		return nil, err
-	}
-
-	store := &Store{index: reader, content: file, outindex: nil, output: nil, last: -1}
 	err = store.Verify()
-
 	if err != nil {
 		return nil, err
 	} else {
@@ -82,8 +58,11 @@ func OpenReadonlyStore(path string) (*Store, error) {
 }
 
 func (self *Store) Verify() error {
-	var max int64 = int64(self.index.Len()) / (8 * 3)
-
+	imax, err := self.outindex.Seek(0, io.SeekEnd)
+	if err != nil {
+		return err
+	}
+	max := int64(imax) / storeCellByteSize
 	if max == 0 {
 		return nil
 	}
@@ -96,7 +75,7 @@ func (self *Store) Verify() error {
 		}
 
 		if value != current {
-			fmt.Println("invalid", value, current, max)
+			fmt.Println("invalid: found", value, "expected:", current, max)
 			return errors.New("...Store verification failed: Invalid index " + string(value) + " " + string(current))
 		}
 
@@ -111,21 +90,34 @@ func (self *Store) Verify() error {
 }
 
 func (self *Store) getIndex(index int64) (int64, error) {
-	return self.getInt64(index * 8 * 3)
+	return self.getInt64((index * storeCellByteSize) + indexStoreCellOffset)
 }
 
 func (self *Store) getOffset(index int64) (int64, error) {
-	return self.getInt64((index * 8 * 3) + 8)
+	return self.getInt64((index * storeCellByteSize) + offsetStoreCellOffset)
 }
 
 func (self *Store) getLength(index int64) (int64, error) {
-	return self.getInt64((index * 8 * 3) + (8 * 2))
+	return self.getInt64((index * storeCellByteSize) + lengthStoreCellOffset)
 }
 
 func (self *Store) getInt64(index int64) (int64, error) {
-	bs := make([]byte, 8)
-	self.index.ReadAt(bs, index)
+	bs := make([]byte, int64Size)
+	_, err := self.outindex.Seek(index, io.SeekStart)
+	if err != nil {
+		fmt.Println("Error in getInt64 Seek", err)
+		return -1, err
+	}
+	_, err2 := self.outindex.Read(bs)
+	if err2 != nil {
+		fmt.Println("Error in getInt64 Read", self.Path, index)
+		return -1, err2
+	}
 	value, _ := binary.Varint(bs)
+
+	if Debug {
+		fmt.Println("getInt64", index, len(bs), bs)
+	}
 
 	return value, nil
 }
@@ -138,23 +130,32 @@ func (self *Store) GetRecord(index int64) (*Record, error) {
 
 	offset, err = self.getOffset(index)
 	if err != nil {
+		fmt.Println("Error in GetRecord - getOffset", index)
 		return nil, err
 	}
 
 	length, err = self.getLength(index)
 	if err != nil {
+		fmt.Println("Error in GetRecord - getLength", index)
 		return nil, err
 	}
 
 	bs = make([]byte, length)
-	_, err = self.content.Seek(offset, 0)
+	_, err = self.output.Seek(offset, os.SEEK_SET)
 	if err != nil {
+		fmt.Println("Error in GetRecord - Seek", offset)
 		return nil, err
 	}
 
-	_, err = self.content.Read(bs)
+	_, err = self.output.Read(bs)
 	if err != nil {
+		fmt.Println("Error in GetRecord - Read", offset)
 		return nil, err
+	}
+
+	if length == 0 || len(bs) == 0 {
+		fmt.Println("Error, zero length sequence", index, offset, length, len(bs), bs)
+		return nil, errors.New("Error, zero length sequence")
 	}
 
 	return &Record{Index: index, Data: bs}, nil
@@ -165,20 +166,31 @@ func (self *Store) LastIndex() int64 {
 }
 
 func (self *Store) Add(data []byte) int64 {
-	//	fmt.Println("Adding to store")
-	//	fmt.Println("Last:", self.last)
-	index := self.last + 1
-	stat, err := self.output.Stat()
-	if err != nil {
+	if len(data) == 0 {
+		fmt.Println("Cannot add sequence with 0 length")
 		return -1
 	}
-	offset := stat.Size()
+
+	if Debug {
+		fmt.Println("Adding to store", self, self.Path, self.last)
+	}
+
+	index := self.last + 1
+
+	// stat, err := self.output.Stat()
+	// if err != nil {
+	// 	return -1
+	// }
+	// offset := stat.Size()
 
 	length := int64(len(data))
+	offset := self.expectedOutputLength
 
-	self.output.Seek(0, 1) // End of file
+	//	fmt.Println("Adding", offset, length, offset+length)
+
 	self.output.Write(data)
 	self.output.Sync()
+	self.expectedOutputLength = self.expectedOutputLength + length
 
 	self.AddIndex(index, offset, length)
 
@@ -186,34 +198,40 @@ func (self *Store) Add(data []byte) int64 {
 }
 
 func (self *Store) AddIndex(index int64, offset int64, length int64) {
-	//	fmt.Println("Adding to store index", index, offset, length)
-	self.last = index
-	//	fmt.Println("Last:", self.last)
-	stat, err := self.outindex.Stat()
-	if err != nil {
+	if length == 0 {
+		fmt.Println("Cannot add sequence with 0 length")
 		return
 	}
-	ioffset := stat.Size()
-	if ioffset%(8*3) != 0 {
+
+	if Debug {
+		fmt.Println("Adding to store index", index, offset, length, self.last)
+	}
+	self.last = index
+	//	fmt.Println("Last:", self.last)
+
+	ioffset := self.expectedOutindexLength
+
+	if ioffset%(storeCellByteSize) != 0 {
 		// FIXME - reduce index and last
-		roundedSize := (ioffset / (8 * 3)) * (8 * 3)
-		fmt.Println("Truncating index", ioffset, roundedSize)
+		roundedSize := (ioffset / storeCellByteSize) * storeCellByteSize
+		fmt.Println("Truncating index", ioffset, storeCellByteSize, ioffset%storeCellByteSize, roundedSize)
 		self.outindex.Truncate(roundedSize)
 	}
 
-	elems := []int64{index, offset, length}
-	bss := make([][]byte, 3)
-	for i := 0; i < len(elems); i++ {
-		bss[i] = make([]byte, 8)
-		binary.PutVarint(bss[i], elems[i])
-	}
+	data := make([]byte, int64Size)
 
-	sep := make([]byte, 0)
-	data := bytes.Join(bss, sep)
-
-	self.outindex.Seek(0, 1) // End of file
+	binary.PutVarint(data, index)
 	self.outindex.Write(data)
+
+	binary.PutVarint(data, offset)
+	self.outindex.Write(data)
+
+	binary.PutVarint(data, length)
+	self.outindex.Write(data)
+
 	self.outindex.Sync()
+
+	self.expectedOutindexLength = self.expectedOutindexLength + storeCellByteSize
 }
 
 func (self *Store) FromIndexDo(index int64, channel chan *Record) {
@@ -241,52 +259,6 @@ func (self *Store) BlockingFromIndexDo(index int64, handle func(*Record)) {
 }
 
 func (self *Store) Close() {
-	self.content.Close()
 	self.outindex.Close()
 	self.output.Close()
-}
-
-// StoreData contains data derived from inputs
-type StoreData struct {
-	Last int64
-}
-
-// Load loads freefall.StoreData from storage
-func LoadStoreData(path string) (*StoreData, error) {
-	var last int64
-
-	file, err := os.Open("store/" + path + "/derived")
-	if err != nil {
-		fmt.Println("Could not open derived")
-		return &StoreData{Last: -1}, nil
-	}
-
-	buff := make([]byte, 8)
-	_, err = file.Read(buff)
-	if err != nil {
-		return nil, err
-	}
-
-	last, _ = binary.Varint(buff)
-
-	file.Close()
-
-	return &StoreData{Last: last}, nil
-}
-
-// Save saves StoreData to storage
-func (self *StoreData) Save(path string) error {
-	fmt.Println("Saving...", self.Last)
-	output, err := os.OpenFile("store/"+path+"/derived", os.O_WRONLY|os.O_CREATE, 0666)
-	if err != nil {
-		return err
-	}
-
-	buff := make([]byte, 8)
-	binary.PutVarint(buff, self.Last)
-	output.Write(buff)
-
-	output.Close()
-
-	return nil
 }
