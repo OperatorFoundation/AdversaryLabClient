@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"runtime"
 
+	"github.com/blanu/AdversaryLab-nanomsg/freefall"
 	"github.com/blanu/AdversaryLab-nanomsg/services"
 )
 
@@ -14,17 +15,18 @@ func main() {
 
 	fmt.Println("*** INIT")
 
-	train := services.NewTrainPacketService("tcp://localhost:4567", updates)
+	storeCache := freefall.NewStoreCache()
+
+	train := services.NewTrainPacketService("tcp://localhost:4567", updates, storeCache)
 	//	test := services.NewTestPacketService("tcp://localhost:4569", updates)
 	fmt.Println("2")
-	//	rule := services.NewRuleService("tcp://localhost:4568", updates)
+	rule := services.NewRuleService("tcp://localhost:4568", updates, storeCache)
 
 	fmt.Println("*** RUN")
 
-	train.Run()
-	//	go train.Run()
+	go train.Run()
 	//	go test.Run()
-	//	rule.Run()
+	rule.Run()
 
 	fmt.Println("*** FINISHED")
 }
