@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"fmt"
 	"io/ioutil"
+	"strings"
 
 	"github.com/ugorji/go/codec"
 
@@ -13,16 +14,16 @@ import (
 )
 
 type RuleHandlers struct {
-	handlers map[string]*RuleHandler
-	source   adversarylab.PubsubSource
+	handlers   map[string]*RuleHandler
+	source     adversarylab.PubsubSource
+	storeCache *freefall.StoreCache
 }
 
 // StoreHandler is a request handler that knows about storage
 type RuleHandler struct {
-	path           string
-	store          *freefall.Store
-	bytemap        *freefall.Bytemap
-	cachedSequence []byte
+	path       string
+	store      *freefall.Store
+	cachedRule *freefall.RuleCandidate
 }
 
 type RuleService struct {
@@ -32,29 +33,20 @@ type RuleService struct {
 	source   adversarylab.PubsubSource
 }
 
-func NewRuleService(listenAddress string, updates chan Update) *RuleService {
+func NewRuleService(listenAddress string, updates chan Update, storeCache *freefall.StoreCache) *RuleService {
 	source := make(adversarylab.PubsubSource)
 
-	fmt.Println("3")
-
-	handlers := RuleHandlers{handlers: make(map[string]*RuleHandler), source: source}
-	fmt.Println("3.5")
+	handlers := RuleHandlers{handlers: make(map[string]*RuleHandler), source: source, storeCache: storeCache}
 	files, err := ioutil.ReadDir("store")
 	if err != nil {
 		fmt.Println("Failed to read store directory", err)
 	} else {
 		for _, file := range files {
-			fmt.Println("Loading", file.Name())
 			handlers.Load(file.Name())
-			fmt.Println("Loaded")
 		}
 	}
 
-	fmt.Println("4")
-
 	serve := adversarylab.PubsubListen(listenAddress, source)
-
-	fmt.Println("5")
 
 	return &RuleService{handlers: handlers, serve: serve, updates: updates, source: source}
 }
@@ -65,41 +57,33 @@ func (self *RuleService) Run() {
 }
 
 func (self RuleHandlers) Load(name string) *RuleHandler {
+	var store *freefall.Store
+	var err error
+
 	if handler, ok := self.handlers[name]; ok {
 		return handler
 	} else {
-		fmt.Println("new store")
-		store, err := freefall.OpenReadonlyStore(name)
-		if err != nil {
-			fmt.Println("Error opening store")
-			fmt.Println(err)
-			return nil
+		store = self.storeCache.Get(name + "-offsets-sequence")
+		if store == nil {
+			store, err = freefall.OpenStore(name + "-offsets-sequence")
+			if err != nil {
+				fmt.Println("Error opening store")
+				fmt.Println(err)
+				return nil
+			}
+
+			self.storeCache.Put(name, store)
 		}
 
-		fmt.Println("new bytemap")
-		bytemap, err2 := freefall.NewBytemap(name)
-		if err2 != nil {
-			fmt.Println("Error opening bytemap")
-			fmt.Println(err2)
-			return nil
-		}
-
-		fmt.Println("rule handler")
-		handler := &RuleHandler{path: name, store: store, bytemap: bytemap, cachedSequence: nil}
-		sequence := handler.Init()
-		if sequence != nil {
-			handler.cachedSequence = sequence
-			rule := adversarylab.Rule{Path: name, Sequence: sequence}
-			fmt.Println("Sending rule", name, sequence)
-			go sendRule(self.source, rule)
-		}
+		//		fmt.Println("New rule store", store)
+		handler := &RuleHandler{path: name, store: store, cachedRule: nil}
 		self.handlers[name] = handler
 
 		return handler
 	}
 }
 
-func sendRule(source adversarylab.PubsubSource, rule adversarylab.Rule) {
+func sendRule(source adversarylab.PubsubSource, rule *adversarylab.Rule) {
 	var value = adversarylab.NamedType{Name: "adversarylab.Rule", Value: rule}
 
 	var buff = new(bytes.Buffer)
@@ -120,24 +104,15 @@ func sendRule(source adversarylab.PubsubSource, rule adversarylab.Rule) {
 
 func (self *RuleService) handleUpdates() {
 	for update := range self.updates {
-		fmt.Println("received update", update.Path)
+		//		fmt.Println("received update", update)
 		name := update.Path
 		handler := self.handlers.Load(name)
 		if handler != nil {
-			result := handler.Handle()
-			fmt.Println("Sending rule", name, result)
+			result := handler.Handle(name, update.Rule)
 			if result != nil {
-				if handler.cachedSequence == nil {
-					sendRule(self.source, adversarylab.Rule{Path: name, Sequence: result})
-					handler.cachedSequence = result
-				} else {
-					if !bytes.Equal(result, handler.cachedSequence) {
-						sendRule(self.source, adversarylab.Rule{Path: name, Sequence: result})
-						handler.cachedSequence = result
-					} else {
-						fmt.Println("Rejecting duplicate rule", handler.cachedSequence)
-					}
-				}
+				fmt.Println("Sending rule", name, len(result.Sequence), result)
+				fmt.Print("!")
+				sendRule(self.source, result)
 			}
 		} else {
 			fmt.Println("Could not load handler for", name)
@@ -145,22 +120,22 @@ func (self *RuleService) handleUpdates() {
 	}
 }
 
-// Init process all items that are already in storage
-func (self *RuleHandler) Init() []byte {
-	return self.bytemap.Extract()
-}
-
 // Handle handles requests
-func (self *RuleHandler) Handle() []byte {
-	index := self.bytemap.GetIndex()
-	self.store.BlockingFromIndexDo(index, func(record *freefall.Record) {
-		self.bytemap.ProcessBytes(record)
-	})
+func (self *RuleHandler) Handle(name string, cn *freefall.RuleCandidate) *adversarylab.Rule {
+	self.cachedRule = cn
+	index := cn.Index
+	//	fmt.Println("Handle", self.store)
+	freefall.Debug = true
+	record, err := self.store.GetRecord(index)
+	freefall.Debug = false
+	if err != nil {
+		return nil
+	}
 
-	return self.bytemap.Extract()
-}
+	fmt.Println("Rule record:", record)
 
-// Save saves StoreData to storage
-func (self *RuleHandler) Save() {
-	self.bytemap.Save()
+	sequence := record.Data
+	parts := strings.Split(name, "-")
+
+	return &adversarylab.Rule{Dataset: parts[0], RequireForbid: cn.RequireForbid(), Incoming: parts[1] == "incoming", Sequence: sequence}
 }
