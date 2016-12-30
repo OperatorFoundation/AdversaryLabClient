@@ -1,6 +1,10 @@
 package freefall
 
-import "github.com/Workiva/go-datastructures/trie/ctrie"
+import (
+	"fmt"
+
+	"github.com/Workiva/go-datastructures/trie/ctrie"
+)
 
 type SequenceMap struct {
 	store   *Store
@@ -28,6 +32,7 @@ func NewSequenceMap(name string, updates chan *RuleCandidate) (*SequenceMap, err
 }
 
 func (self *SequenceMap) Increment(allowBlock bool, sequence []byte) {
+	//	fmt.Println("Incrementing", len(sequence), sequence)
 	if val, ok := self.ctrie.Lookup(sequence); ok {
 		// Existing sequence
 		record := val.(*Record)
@@ -35,10 +40,25 @@ func (self *SequenceMap) Increment(allowBlock bool, sequence []byte) {
 	} else {
 		// New sequence
 		index := self.store.Add(sequence)
-		record, err := self.store.GetRecord(index)
-		if err != nil {
+		if index == -1 {
+			fmt.Println("Error adding sequence to store", len(sequence), sequence)
 			return
 		}
+		//		fmt.Println("Added sequence", self.store.Path, len(sequence), "got index", index)
+		record, err := self.store.GetRecord(index)
+		if err != nil {
+			fmt.Println("Error adding record")
+			return
+		}
+		if len(record.Data) == 0 {
+			fmt.Println("Error, added sequence now has 0 length")
+			return
+		}
+		if record.Index != index {
+			fmt.Println("Error, record has incorrect index")
+			return
+		}
+
 		self.bytemap.IncrementCount(index, allowBlock)
 		self.ctrie.Insert(sequence, record)
 	}
