@@ -10,8 +10,9 @@ import (
 )
 
 type Handlers struct {
-	handlers map[string]*StoreHandler
-	updates  chan Update
+	handlers   map[string]*StoreHandler
+	updates    chan Update
+	storeCache *freefall.StoreCache
 }
 
 // StoreHandler is a request handler that knows about storage
@@ -35,8 +36,8 @@ type Update struct {
 	Rule *freefall.RuleCandidate
 }
 
-func NewTrainPacketService(listenAddress string, updates chan Update) *TrainService {
-	handlers := Handlers{handlers: make(map[string]*StoreHandler), updates: updates}
+func NewTrainPacketService(listenAddress string, updates chan Update, storeCache *freefall.StoreCache) *TrainService {
+	handlers := Handlers{handlers: make(map[string]*StoreHandler), updates: updates, storeCache: storeCache}
 	// files, err := ioutil.ReadDir("store")
 	// if err != nil {
 	// 	fmt.Println("Failed to read store directory", err)
@@ -53,21 +54,28 @@ func NewTrainPacketService(listenAddress string, updates chan Update) *TrainServ
 
 func (self *TrainService) Run() {
 	for {
-		fmt.Println("accepting reqresp")
+		//		fmt.Println("accepting reqresp")
 		self.serve.Accept(self.handlers.Handle)
-		fmt.Println("accepted reqresp")
+		//		fmt.Println("accepted reqresp")
 	}
 }
 
 func (self Handlers) Load(name string) *StoreHandler {
+	var err error
+
 	if handler, ok := self.handlers[name]; ok {
 		return handler
 	} else {
-		store, err := freefall.OpenStore(name)
-		if err != nil {
-			fmt.Println("Error opening store")
-			fmt.Println(err)
-			return nil
+		store := self.storeCache.Get(name)
+		if store == nil {
+			store, err = freefall.OpenStore(name)
+			if err != nil {
+				fmt.Println("Error opening store")
+				fmt.Println(err)
+				return nil
+			}
+
+			self.storeCache.Put(name, store)
 		}
 
 		// sm, err2 := freefall.NewSequenceMap(name)
@@ -96,7 +104,7 @@ func (self Handlers) Load(name string) *StoreHandler {
 }
 
 func (self Handlers) Handle(request []byte) []byte {
-	fmt.Println("New packet")
+	//	fmt.Println("New packet")
 	var name string
 
 	var value = adversarylab.NamedType{}
@@ -111,7 +119,7 @@ func (self Handlers) Handle(request []byte) []byte {
 
 	switch value.Name {
 	case "adversarylab.TrainPacket":
-		fmt.Println("Got packet")
+		//		fmt.Println("Got packet")
 		packet := adversarylab.TrainPacketFromMap(value.Value.(map[interface{}]interface{}))
 		if packet.Incoming {
 			name = packet.Dataset + "-incoming"
@@ -137,10 +145,10 @@ func (self Handlers) Handle(request []byte) []byte {
 
 // Init process all items that are already in storage
 func (self *StoreHandler) Init() {
-	fmt.Println("Loading")
+	//	fmt.Println("Loading")
 	// FIXME - loading of Last value
 	//	self.Load()
-	fmt.Println("Processing")
+	//	fmt.Println("Processing")
 	go self.HandleChannel(self.handleChannel)
 	go self.HandleRuleUpdatesChannel(self.ruleUpdates)
 	//	self.store.FromIndexDo(self.store.LastIndex(), self.processChannel)
@@ -148,15 +156,17 @@ func (self *StoreHandler) Init() {
 
 func (self *StoreHandler) HandleChannel(ch chan *adversarylab.TrainPacket) {
 	for request := range ch {
-		fmt.Print(".")
+		if !freefall.Debug {
+			fmt.Print(".")
+		}
 		self.Handle(request)
 	}
 }
 
 func (self *StoreHandler) HandleRuleUpdatesChannel(ch chan *freefall.RuleCandidate) {
 	for rule := range ch {
-		fmt.Print(":")
 		update := Update{Path: self.path, Rule: rule}
+		//		fmt.Println("training sending update", update)
 		self.updates <- update
 	}
 }
@@ -176,7 +186,7 @@ func (self *StoreHandler) Handle(request *adversarylab.TrainPacket) []byte {
 
 // Process processes records
 func (self *StoreHandler) Process(allowBlock bool, record *freefall.Record) {
-	fmt.Println("Processing", record.Index)
+	//	fmt.Println("Processing", record.Index)
 
 	if record.Index < self.store.LastIndex() {
 		fmt.Println("Rejecting duplicate", record.Index, "<", self.store.LastIndex())
@@ -185,9 +195,7 @@ func (self *StoreHandler) Process(allowBlock bool, record *freefall.Record) {
 
 	// FIXME - process bytes into bytemaps
 
-	fmt.Println("Sending update")
-	go self.processBytes(allowBlock, record.Data)
-	self.updates <- Update{Path: self.path}
+	self.processBytes(allowBlock, record.Data)
 }
 
 func (self *StoreHandler) processBytes(allowBlock bool, bytes []byte) {
