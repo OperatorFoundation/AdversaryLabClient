@@ -1,4 +1,4 @@
-package freefall
+package storage
 
 import (
 	"encoding/binary"
@@ -11,7 +11,7 @@ type StoreData struct {
 	Last int64
 }
 
-// Load loads freefall.StoreData from storage
+// Load loads storage.StoreData from storage
 func LoadStoreData(path string) (*StoreData, error) {
 	var last int64
 

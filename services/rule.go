@@ -9,21 +9,21 @@ import (
 
 	"github.com/ugorji/go/codec"
 
-	"github.com/OperatorFoundation/AdversaryLab/freefall"
+	"github.com/OperatorFoundation/AdversaryLab/storage"
 	"github.com/OperatorFoundation/AdversaryLab-protocol/adversarylab"
 )
 
 type RuleHandlers struct {
 	handlers   map[string]*RuleHandler
 	source     adversarylab.PubsubSource
-	storeCache *freefall.StoreCache
+	storeCache *storage.StoreCache
 }
 
 // StoreHandler is a request handler that knows about storage
 type RuleHandler struct {
 	path       string
-	store      *freefall.Store
-	cachedRule *freefall.RuleCandidate
+	store      *storage.Store
+	cachedRule *storage.RuleCandidate
 }
 
 type RuleService struct {
@@ -33,7 +33,7 @@ type RuleService struct {
 	source   adversarylab.PubsubSource
 }
 
-func NewRuleService(listenAddress string, updates chan Update, storeCache *freefall.StoreCache) *RuleService {
+func NewRuleService(listenAddress string, updates chan Update, storeCache *storage.StoreCache) *RuleService {
 	source := make(adversarylab.PubsubSource)
 
 	handlers := RuleHandlers{handlers: make(map[string]*RuleHandler), source: source, storeCache: storeCache}
@@ -57,7 +57,7 @@ func (self *RuleService) Run() {
 }
 
 func (self RuleHandlers) Load(name string) *RuleHandler {
-	var store *freefall.Store
+	var store *storage.Store
 	var err error
 
 	if handler, ok := self.handlers[name]; ok {
@@ -65,7 +65,7 @@ func (self RuleHandlers) Load(name string) *RuleHandler {
 	} else {
 		store = self.storeCache.Get(name + "-offsets-sequence")
 		if store == nil {
-			store, err = freefall.OpenStore(name + "-offsets-sequence")
+			store, err = storage.OpenStore(name + "-offsets-sequence")
 			if err != nil {
 				fmt.Println("Error opening store")
 				fmt.Println(err)
@@ -121,13 +121,13 @@ func (self *RuleService) handleUpdates() {
 }
 
 // Handle handles requests
-func (self *RuleHandler) Handle(name string, cn *freefall.RuleCandidate) *adversarylab.Rule {
+func (self *RuleHandler) Handle(name string, cn *storage.RuleCandidate) *adversarylab.Rule {
 	self.cachedRule = cn
 	index := cn.Index
 	//	fmt.Println("Handle", self.store)
-	freefall.Debug = true
+	storage.Debug = true
 	record, err := self.store.GetRecord(index)
-	freefall.Debug = false
+	storage.Debug = false
 	if err != nil {
 		return nil
 	}

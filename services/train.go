@@ -5,24 +5,24 @@ import (
 
 	"github.com/ugorji/go/codec"
 
-	"github.com/OperatorFoundation/AdversaryLab/freefall"
+	"github.com/OperatorFoundation/AdversaryLab/storage"
 	"github.com/OperatorFoundation/AdversaryLab-protocol/adversarylab"
 )
 
 type Handlers struct {
 	handlers   map[string]*StoreHandler
 	updates    chan Update
-	storeCache *freefall.StoreCache
+	storeCache *storage.StoreCache
 }
 
 // StoreHandler is a request handler that knows about storage
 type StoreHandler struct {
 	path  string
-	store *freefall.Store
-	//	seqs          *freefall.SequenceMap
-	offseqs       *freefall.OffsetSequenceMap
+	store *storage.Store
+	//	seqs          *storage.SequenceMap
+	offseqs       *storage.OffsetSequenceMap
 	updates       chan Update
-	ruleUpdates   chan *freefall.RuleCandidate
+	ruleUpdates   chan *storage.RuleCandidate
 	handleChannel chan *adversarylab.TrainPacket
 }
 
@@ -33,10 +33,10 @@ type TrainService struct {
 
 type Update struct {
 	Path string
-	Rule *freefall.RuleCandidate
+	Rule *storage.RuleCandidate
 }
 
-func NewTrainPacketService(listenAddress string, updates chan Update, storeCache *freefall.StoreCache) *TrainService {
+func NewTrainPacketService(listenAddress string, updates chan Update, storeCache *storage.StoreCache) *TrainService {
 	handlers := Handlers{handlers: make(map[string]*StoreHandler), updates: updates, storeCache: storeCache}
 	// files, err := ioutil.ReadDir("store")
 	// if err != nil {
@@ -68,7 +68,7 @@ func (self Handlers) Load(name string) *StoreHandler {
 	} else {
 		store := self.storeCache.Get(name)
 		if store == nil {
-			store, err = freefall.OpenStore(name)
+			store, err = storage.OpenStore(name)
 			if err != nil {
 				fmt.Println("Error opening store")
 				fmt.Println(err)
@@ -78,16 +78,16 @@ func (self Handlers) Load(name string) *StoreHandler {
 			self.storeCache.Put(name, store)
 		}
 
-		// sm, err2 := freefall.NewSequenceMap(name)
+		// sm, err2 := storage.NewSequenceMap(name)
 		// if err2 != nil {
 		// 	fmt.Println("Error opening bytemap")
 		// 	fmt.Println(err2)
 		// 	return nil
 		// }
 
-		ruleUpdates := make(chan *freefall.RuleCandidate, 10)
+		ruleUpdates := make(chan *storage.RuleCandidate, 10)
 
-		osm, err2 := freefall.NewOffsetSequenceMap(name, ruleUpdates)
+		osm, err2 := storage.NewOffsetSequenceMap(name, ruleUpdates)
 		if err2 != nil {
 			fmt.Println("Error opening bytemap")
 			fmt.Println(err2)
@@ -156,14 +156,14 @@ func (self *StoreHandler) Init() {
 
 func (self *StoreHandler) HandleChannel(ch chan *adversarylab.TrainPacket) {
 	for request := range ch {
-		if !freefall.Debug {
+		if !storage.Debug {
 			fmt.Print(".")
 		}
 		self.Handle(request)
 	}
 }
 
-func (self *StoreHandler) HandleRuleUpdatesChannel(ch chan *freefall.RuleCandidate) {
+func (self *StoreHandler) HandleRuleUpdatesChannel(ch chan *storage.RuleCandidate) {
 	for rule := range ch {
 		update := Update{Path: self.path, Rule: rule}
 		//		fmt.Println("training sending update", update)
@@ -185,7 +185,7 @@ func (self *StoreHandler) Handle(request *adversarylab.TrainPacket) []byte {
 }
 
 // Process processes records
-func (self *StoreHandler) Process(allowBlock bool, record *freefall.Record) {
+func (self *StoreHandler) Process(allowBlock bool, record *storage.Record) {
 	//	fmt.Println("Processing", record.Index)
 
 	if record.Index < self.store.LastIndex() {

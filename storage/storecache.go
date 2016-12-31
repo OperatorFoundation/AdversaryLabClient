@@ -1,4 +1,4 @@
-package freefall
+package storage
 
 import (
 	"github.com/orcaman/concurrent-map"

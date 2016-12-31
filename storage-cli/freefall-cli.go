@@ -9,17 +9,17 @@ import (
 	"os"
 	"strconv"
 
-	"github.com/OperatorFoundation/AdversaryLab/freefall"
+	"github.com/OperatorFoundation/AdversaryLab/storage"
 
 	"golang.org/x/exp/mmap"
 )
 
 func main() {
-	var store *freefall.Store
+	var store *storage.Store
 	var err error
 
 	if os.Args[1] == "verify" {
-		store, err = freefall.OpenStore(os.Args[2])
+		store, err = storage.OpenStore(os.Args[2])
 		if err != nil {
 			fmt.Println("Error opening store")
 			fmt.Println(err)
@@ -27,7 +27,7 @@ func main() {
 		}
 		store.Close()
 	} else if os.Args[1] == "add" {
-		store, err = freefall.OpenStore(os.Args[2])
+		store, err = storage.OpenStore(os.Args[2])
 		if err != nil {
 			fmt.Println("Error opening store")
 			fmt.Println(err)
@@ -38,14 +38,14 @@ func main() {
 		store.Add(value)
 		store.Close()
 
-		store, err = freefall.OpenStore(os.Args[2])
+		store, err = storage.OpenStore(os.Args[2])
 		if err != nil {
 			fmt.Println("Error opening store")
 			fmt.Println(err)
 			return
 		}
 	} else if os.Args[1] == "rule" {
-		bytemap, err := freefall.NewReadonlyBytemap(os.Args[2])
+		bytemap, err := storage.NewReadonlyBytemap(os.Args[2])
 		if err != nil {
 			fmt.Println("Error opening bytemap file", err)
 			return
@@ -54,7 +54,7 @@ func main() {
 		fmt.Println(len(rule))
 		fmt.Println(hex.EncodeToString(rule))
 	} else if os.Args[1] == "bytes" {
-		bytemap, err := freefall.NewReadonlyBytemap(os.Args[2])
+		bytemap, err := storage.NewReadonlyBytemap(os.Args[2])
 		if err != nil {
 			fmt.Println("Error opening bytemap file", err)
 			return
@@ -74,7 +74,7 @@ func main() {
 		}
 		fmt.Println()
 	} else if os.Args[1] == "byte" {
-		bytemap, err := freefall.NewReadonlyBytemap(os.Args[2])
+		bytemap, err := storage.NewReadonlyBytemap(os.Args[2])
 		if err != nil {
 			fmt.Println("Error opening bytemap file", err)
 			return
@@ -96,12 +96,12 @@ func main() {
 		}
 		fmt.Println(bytemap.GetCount(int(index), byte(prev), byte(next)))
 	} else if os.Args[1] == "bytemap" {
-		bytemap, err := freefall.NewBytemap(os.Args[2])
+		bytemap, err := storage.NewBytemap(os.Args[2])
 		if err != nil {
 			fmt.Println("Error opening bytemap file", err)
 			return
 		}
-		store, err2 := freefall.OpenReadonlyStore(os.Args[2])
+		store, err2 := storage.OpenReadonlyStore(os.Args[2])
 		if err2 != nil {
 			fmt.Println("Error opening store")
 			fmt.Println(err2)
@@ -110,25 +110,25 @@ func main() {
 
 		index := bytemap.GetIndex()
 		fmt.Println("Processing", index, "->", store.LastIndex())
-		store.BlockingFromIndexDo(index, func(record *freefall.Record) {
+		store.BlockingFromIndexDo(index, func(record *storage.Record) {
 			bytemap.ProcessBytes(record)
 		})
 
 		store.Close()
 	} else if os.Args[1] == "forcebytemap" {
-		bytemap, err := freefall.NewBytemap(os.Args[2])
+		bytemap, err := storage.NewBytemap(os.Args[2])
 		if err != nil {
 			fmt.Println("Error opening bytemap file", err)
 			return
 		}
-		store, err2 := freefall.OpenReadonlyStore(os.Args[2])
+		store, err2 := storage.OpenReadonlyStore(os.Args[2])
 		if err2 != nil {
 			fmt.Println("Error opening store")
 			fmt.Println(err2)
 			return
 		}
 
-		store.BlockingFromIndexDo(0, func(record *freefall.Record) {
+		store.BlockingFromIndexDo(0, func(record *storage.Record) {
 			bytemap.ForceProcessBytes(record)
 		})
 

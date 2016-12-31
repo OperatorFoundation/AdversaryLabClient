@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"runtime"
 
-	"github.com/OperatorFoundation/AdversaryLab/freefall"
+	"github.com/OperatorFoundation/AdversaryLab/storage"
 	"github.com/OperatorFoundation/AdversaryLab/services"
 )
 
@@ -15,7 +15,7 @@ func main() {
 
 	fmt.Println("*** INIT")
 
-	storeCache := freefall.NewStoreCache()
+	storeCache := storage.NewStoreCache()
 
 	train := services.NewTrainPacketService("tcp://localhost:4567", updates, storeCache)
 	//	test := services.NewTestPacketService("tcp://localhost:4569", updates)
