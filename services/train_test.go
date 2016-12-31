@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"testing"
 
-	"github.com/OperatorFoundation/AdversaryLab-protocol/adversarylab"
+	"github.com/OperatorFoundation/AdversaryLab/protocol"
 )
 
 func TestCountmap(t *testing.T) {
@@ -13,7 +13,7 @@ func TestCountmap(t *testing.T) {
 
 	t.Log("TestTrain")
 
-	lab := adversarylab.Connect("tcp://localhost:4567")
+	lab := protocol.Connect("tcp://localhost:4567")
 
 	// Allowed incoming - 0, 01, 012, ... 0..126
 	// for x = 0; x < 10; x++ {

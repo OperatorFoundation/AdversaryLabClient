@@ -6,7 +6,7 @@ import (
 	"github.com/ugorji/go/codec"
 
 	"github.com/OperatorFoundation/AdversaryLab/storage"
-	"github.com/OperatorFoundation/AdversaryLab-protocol/adversarylab"
+	"github.com/OperatorFoundation/AdversaryLab/protocol"
 )
 
 type Handlers struct {
@@ -23,12 +23,12 @@ type StoreHandler struct {
 	offseqs       *storage.OffsetSequenceMap
 	updates       chan Update
 	ruleUpdates   chan *storage.RuleCandidate
-	handleChannel chan *adversarylab.TrainPacket
+	handleChannel chan *protocol.TrainPacket
 }
 
 type TrainService struct {
 	handlers Handlers
-	serve    adversarylab.Server
+	serve    protocol.Server
 }
 
 type Update struct {
@@ -47,7 +47,7 @@ func NewTrainPacketService(listenAddress string, updates chan Update, storeCache
 	// 	}
 	// }
 
-	serve := adversarylab.Listen(listenAddress)
+	serve := protocol.Listen(listenAddress)
 
 	return &TrainService{handlers: handlers, serve: serve}
 }
@@ -94,7 +94,7 @@ func (self Handlers) Load(name string) *StoreHandler {
 			return nil
 		}
 
-		handleChannel := make(chan *adversarylab.TrainPacket)
+		handleChannel := make(chan *protocol.TrainPacket)
 
 		handler := &StoreHandler{path: name, store: store, offseqs: osm, updates: self.updates, ruleUpdates: ruleUpdates, handleChannel: handleChannel}
 		handler.Init()
@@ -107,8 +107,8 @@ func (self Handlers) Handle(request []byte) []byte {
 	//	fmt.Println("New packet")
 	var name string
 
-	var value = adversarylab.NamedType{}
-	var h = adversarylab.NamedTypeHandle()
+	var value = protocol.NamedType{}
+	var h = protocol.NamedTypeHandle()
 	var dec = codec.NewDecoderBytes(request, h)
 	var err = dec.Decode(&value)
 	if err != nil {
@@ -118,9 +118,9 @@ func (self Handlers) Handle(request []byte) []byte {
 	}
 
 	switch value.Name {
-	case "adversarylab.TrainPacket":
+	case "protocol.TrainPacket":
 		//		fmt.Println("Got packet")
-		packet := adversarylab.TrainPacketFromMap(value.Value.(map[interface{}]interface{}))
+		packet := protocol.TrainPacketFromMap(value.Value.(map[interface{}]interface{}))
 		if packet.Incoming {
 			name = packet.Dataset + "-incoming"
 		} else {
@@ -154,7 +154,7 @@ func (self *StoreHandler) Init() {
 	//	self.store.FromIndexDo(self.store.LastIndex(), self.processChannel)
 }
 
-func (self *StoreHandler) HandleChannel(ch chan *adversarylab.TrainPacket) {
+func (self *StoreHandler) HandleChannel(ch chan *protocol.TrainPacket) {
 	for request := range ch {
 		if !storage.Debug {
 			fmt.Print(".")
@@ -172,7 +172,7 @@ func (self *StoreHandler) HandleRuleUpdatesChannel(ch chan *storage.RuleCandidat
 }
 
 // Handle handles requests
-func (self *StoreHandler) Handle(request *adversarylab.TrainPacket) []byte {
+func (self *StoreHandler) Handle(request *protocol.TrainPacket) []byte {
 	index := self.store.Add(request.Payload)
 	record, err := self.store.GetRecord(index)
 	if err != nil {

@@ -10,12 +10,12 @@ import (
 	"github.com/ugorji/go/codec"
 
 	"github.com/OperatorFoundation/AdversaryLab/storage"
-	"github.com/OperatorFoundation/AdversaryLab-protocol/adversarylab"
+	"github.com/OperatorFoundation/AdversaryLab/protocol"
 )
 
 type RuleHandlers struct {
 	handlers   map[string]*RuleHandler
-	source     adversarylab.PubsubSource
+	source     protocol.PubsubSource
 	storeCache *storage.StoreCache
 }
 
@@ -28,13 +28,13 @@ type RuleHandler struct {
 
 type RuleService struct {
 	handlers RuleHandlers
-	serve    adversarylab.PubsubServer
+	serve    protocol.PubsubServer
 	updates  chan Update
-	source   adversarylab.PubsubSource
+	source   protocol.PubsubSource
 }
 
 func NewRuleService(listenAddress string, updates chan Update, storeCache *storage.StoreCache) *RuleService {
-	source := make(adversarylab.PubsubSource)
+	source := make(protocol.PubsubSource)
 
 	handlers := RuleHandlers{handlers: make(map[string]*RuleHandler), source: source, storeCache: storeCache}
 	files, err := ioutil.ReadDir("store")
@@ -46,7 +46,7 @@ func NewRuleService(listenAddress string, updates chan Update, storeCache *stora
 		}
 	}
 
-	serve := adversarylab.PubsubListen(listenAddress, source)
+	serve := protocol.PubsubListen(listenAddress, source)
 
 	return &RuleService{handlers: handlers, serve: serve, updates: updates, source: source}
 }
@@ -83,12 +83,12 @@ func (self RuleHandlers) Load(name string) *RuleHandler {
 	}
 }
 
-func sendRule(source adversarylab.PubsubSource, rule *adversarylab.Rule) {
-	var value = adversarylab.NamedType{Name: "adversarylab.Rule", Value: rule}
+func sendRule(source protocol.PubsubSource, rule *protocol.Rule) {
+	var value = protocol.NamedType{Name: "protocol.Rule", Value: rule}
 
 	var buff = new(bytes.Buffer)
 	var bw = bufio.NewWriter(buff)
-	var h codec.Handle = adversarylab.NamedTypeHandle()
+	var h codec.Handle = protocol.NamedTypeHandle()
 
 	var enc *codec.Encoder = codec.NewEncoder(bw, h)
 	var err error = enc.Encode(value)
@@ -121,7 +121,7 @@ func (self *RuleService) handleUpdates() {
 }
 
 // Handle handles requests
-func (self *RuleHandler) Handle(name string, cn *storage.RuleCandidate) *adversarylab.Rule {
+func (self *RuleHandler) Handle(name string, cn *storage.RuleCandidate) *protocol.Rule {
 	self.cachedRule = cn
 	index := cn.Index
 	//	fmt.Println("Handle", self.store)
@@ -137,5 +137,5 @@ func (self *RuleHandler) Handle(name string, cn *storage.RuleCandidate) *adversa
 	sequence := record.Data
 	parts := strings.Split(name, "-")
 
-	return &adversarylab.Rule{Dataset: parts[0], RequireForbid: cn.RequireForbid(), Incoming: parts[1] == "incoming", Sequence: sequence}
+	return &protocol.Rule{Dataset: parts[0], RequireForbid: cn.RequireForbid(), Incoming: parts[1] == "incoming", Sequence: sequence}
 }
