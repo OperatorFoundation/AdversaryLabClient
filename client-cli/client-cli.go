@@ -15,7 +15,7 @@ import (
 	"github.com/google/gopacket/layers"
 	"github.com/google/gopacket/pcap"
 
-	"github.com/blanu/AdversaryLab-protocol/adversarylab"
+	"github.com/OperatorFoundation/AdversaryLab/protocol"
 )
 
 type Connection struct {
@@ -63,7 +63,7 @@ func main() {
 }
 
 func capture(dataset string, allowBlock bool, port *string) {
-	var lab adversarylab.Client
+	var lab protocol.Client
 	var err error
 	var input string
 
@@ -71,7 +71,7 @@ func capture(dataset string, allowBlock bool, port *string) {
 
 	fmt.Println("Launching server...")
 
-	lab = adversarylab.Connect("tcp://localhost:4567")
+	lab = protocol.Connect("tcp://localhost:4567")
 
 	captured := map[Connection]gopacket.Packet{}
 
@@ -163,9 +163,9 @@ type RuleSet struct {
 type Rule map[string]interface{}
 
 func rules(captureName string) {
-	var lab adversarylab.PubsubClient
+	var lab protocol.PubsubClient
 
-	lab = adversarylab.PubsubConnect("tcp://localhost:4568")
+	lab = protocol.PubsubConnect("tcp://localhost:4568")
 
 	cache := make(map[string][2][]byte)
 
@@ -344,7 +344,7 @@ func recordPacket(packet gopacket.Packet, captured map[Connection]gopacket.Packe
 	}
 }
 
-func saveCaptured(lab adversarylab.Client, dataset string, allowBlock bool, stopCapturing chan bool, recordable chan gopacket.Packet, port layers.TCPPort) {
+func saveCaptured(lab protocol.Client, dataset string, allowBlock bool, stopCapturing chan bool, recordable chan gopacket.Packet, port layers.TCPPort) {
 	fmt.Println("Saving captured byte sequences... ")
 
 	for {
