@@ -5,7 +5,7 @@ import (
 
 	"github.com/ugorji/go/codec"
 
-	"github.com/OperatorFoundation/AdversaryLab-nanomsg/freefall"
+	"github.com/OperatorFoundation/AdversaryLab/freefall"
 	"github.com/OperatorFoundation/AdversaryLab-protocol/adversarylab"
 )
 

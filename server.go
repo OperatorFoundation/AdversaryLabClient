@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"runtime"
 
-	"github.com/OperatorFoundation/AdversaryLab-nanomsg/freefall"
-	"github.com/OperatorFoundation/AdversaryLab-nanomsg/services"
+	"github.com/OperatorFoundation/AdversaryLab/freefall"
+	"github.com/OperatorFoundation/AdversaryLab/services"
 )
 
 func main() {
