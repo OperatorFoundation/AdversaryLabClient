@@ -5,8 +5,8 @@ import (
 
 	"github.com/ugorji/go/codec"
 
-	"github.com/OperatorFoundation/AdversaryLab/storage"
 	"github.com/OperatorFoundation/AdversaryLab/protocol"
+	"github.com/OperatorFoundation/AdversaryLab/storage"
 )
 
 type Handlers struct {
@@ -21,6 +21,7 @@ type StoreHandler struct {
 	store *storage.Store
 	//	seqs          *storage.SequenceMap
 	offseqs       *storage.OffsetSequenceMap
+	lengths       *storage.LengthCounter
 	updates       chan Update
 	ruleUpdates   chan *storage.RuleCandidate
 	handleChannel chan *protocol.TrainPacket
@@ -94,9 +95,14 @@ func (self Handlers) Load(name string) *StoreHandler {
 			return nil
 		}
 
+		lengthCounter, err := storage.NewLengthCounter(name)
+		if err != nil {
+			fmt.Println("Could not initialize length counter")
+		}
+
 		handleChannel := make(chan *protocol.TrainPacket)
 
-		handler := &StoreHandler{path: name, store: store, offseqs: osm, updates: self.updates, ruleUpdates: ruleUpdates, handleChannel: handleChannel}
+		handler := &StoreHandler{path: name, store: store, offseqs: osm, lengths: lengthCounter, updates: self.updates, ruleUpdates: ruleUpdates, handleChannel: handleChannel}
 		handler.Init()
 		self.handlers[name] = handler
 		return handler
@@ -201,4 +207,5 @@ func (self *StoreHandler) Process(allowBlock bool, record *storage.Record) {
 func (self *StoreHandler) processBytes(allowBlock bool, bytes []byte) {
 	//	self.seqs.ProcessBytes(allowBlock, bytes)
 	self.offseqs.ProcessBytes(allowBlock, bytes)
+	self.lengths.ProcessBytes(allowBlock, bytes)
 }
