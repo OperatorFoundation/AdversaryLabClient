@@ -14,6 +14,10 @@ This analysis can also be used to study tools that specifically attempt to defea
 Adversary Lab analysis works by training a classifier on two observed data sets, the "allow" set and the "block" set.
 For instance, a simulated adversary could allow HTTP, but block HTTPS. By training the system with HTTP and HTTPS data, it will generate a rule that distinguishes these two classes of traffic based on properties observed in the traffic.
 
+## AdversaryLabClient
+
+AdversaryLabClient is a command line tool which captures traffic and submits it to AdversaryLab for analysis.
+
 #### Installation
 
 Adversary Lab is written in the Go programming language. To compile it you need
@@ -59,13 +63,9 @@ bin/client-cli.
 
 #### Running
 
-Run the Adversary Lab service:
+To use the client, Adversary Lab must already be running. See the [AdversaryLab documentation](https://github.com/OperatorFoundation/AdversaryLab) to set up and run AdversaryLab.
 
-    bin/AdversaryLab
-
-This will open two listening ports, one for the training service and one for the rule synthesis service.
-
-To interface with these service, you need to use the command client.
+To interface with the AdversaryLab service, you need to use the command client.
 
 Run the command line client without argument to get usage information:
 
@@ -85,10 +85,3 @@ This will capture live traffic with a destination port of 443 and add it to the 
 
 Once the simulated adversary has both "allow" and "block" traffic, and has observed at least three connections from each type, it can synthesize blocking rules.
 
-Use the command line client to connect to the rule synthesis service:
-
-    bin/client-cli rules example
-
-This will use the data collected in the "example" dataset to synthesize a rule for allowed the traffic from the "allow" set through while blocking traffic from the "block" set.
-The command line client will connect to the rule synthesis services and subscribe to a stream of rules.
-Every time a new packet is processing by the training service, a new rule might be generated. The rule service will send to subscribers only the best rule that it has found so far.
