@@ -5,8 +5,8 @@ import (
 
 	"github.com/ugorji/go/codec"
 
-	"github.com/OperatorFoundation/AdversaryLab/storage"
 	"github.com/OperatorFoundation/AdversaryLab/protocol"
+	"github.com/OperatorFoundation/AdversaryLab/storage"
 )
 
 type Handlers struct {
@@ -21,6 +21,7 @@ type StoreHandler struct {
 	store *storage.Store
 	//	seqs          *storage.SequenceMap
 	offseqs       *storage.OffsetSequenceMap
+	lengths       *storage.LengthCounter
 	updates       chan Update
 	ruleUpdates   chan *storage.RuleCandidate
 	handleChannel chan *protocol.TrainPacket
@@ -70,8 +71,6 @@ func (self Handlers) Load(name string) *StoreHandler {
 		if store == nil {
 			store, err = storage.OpenStore(name)
 			if err != nil {
-				fmt.Println("Error opening store")
-				fmt.Println(err)
 				return nil
 			}
 
@@ -89,14 +88,17 @@ func (self Handlers) Load(name string) *StoreHandler {
 
 		osm, err2 := storage.NewOffsetSequenceMap(name, ruleUpdates)
 		if err2 != nil {
-			fmt.Println("Error opening bytemap")
-			fmt.Println(err2)
 			return nil
+		}
+
+		lengthCounter, err := storage.NewLengthCounter(name)
+		if err != nil {
+			fmt.Println("Could not initialize length counter")
 		}
 
 		handleChannel := make(chan *protocol.TrainPacket)
 
-		handler := &StoreHandler{path: name, store: store, offseqs: osm, updates: self.updates, ruleUpdates: ruleUpdates, handleChannel: handleChannel}
+		handler := &StoreHandler{path: name, store: store, offseqs: osm, lengths: lengthCounter, updates: self.updates, ruleUpdates: ruleUpdates, handleChannel: handleChannel}
 		handler.Init()
 		self.handlers[name] = handler
 		return handler
@@ -173,32 +175,20 @@ func (self *StoreHandler) HandleRuleUpdatesChannel(ch chan *storage.RuleCandidat
 
 // Handle handles requests
 func (self *StoreHandler) Handle(request *protocol.TrainPacket) []byte {
-	index := self.store.Add(request.Payload)
-	record, err := self.store.GetRecord(index)
-	if err != nil {
-		fmt.Println("Error getting new record", err)
-	} else {
-		self.Process(request.AllowBlock, record)
-	}
+
+	self.store.Add(request.Payload)
+	self.Process(request.AllowBlock, request.Payload)
 
 	return []byte("success")
 }
 
 // Process processes records
-func (self *StoreHandler) Process(allowBlock bool, record *storage.Record) {
-	//	fmt.Println("Processing", record.Index)
-
-	if record.Index < self.store.LastIndex() {
-		fmt.Println("Rejecting duplicate", record.Index, "<", self.store.LastIndex())
-		return
-	}
-
-	// FIXME - process bytes into bytemaps
-
-	self.processBytes(allowBlock, record.Data)
+func (self *StoreHandler) Process(allowBlock bool, data []byte) {
+	self.processBytes(allowBlock, data)
 }
 
 func (self *StoreHandler) processBytes(allowBlock bool, bytes []byte) {
 	//	self.seqs.ProcessBytes(allowBlock, bytes)
 	self.offseqs.ProcessBytes(allowBlock, bytes)
+	self.lengths.ProcessBytes(allowBlock, bytes)
 }
