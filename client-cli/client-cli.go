@@ -71,7 +71,7 @@ func capture(dataset string, allowBlock bool, port *string) {
 
 	fmt.Println("Launching server...")
 
-	lab = protocol.Connect("tcp://localhost:4567")
+	lab = protocol.Connect("tcp://138.197.2.243:4567")
 
 	captured := map[Connection]gopacket.Packet{}
 
