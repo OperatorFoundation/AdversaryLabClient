@@ -1,122 +1,135 @@
 package protocol
 
 import (
-	"bufio"
-	"bytes"
-	"fmt"
-
-	"github.com/ugorji/go/codec"
-
-	"github.com/go-mangos/mangos"
-	"github.com/go-mangos/mangos/protocol/req"
-	"github.com/go-mangos/mangos/transport/tcp"
+	"github.com/garyburd/redigo/redis"
+	"github.com/google/gopacket"
+	"github.com/satori/go.uuid"
 )
 
+const (
+	allowedConnectionsKey = "Allowed:Connections"
+	allowedIncomingKey    = "Allowed:Incoming:Packets"
+	allowedOutgoingKey    = "Allowed:Outgoing:Packets"
+
+	allowedIncomingDatesKey = "Allowed:Incoming:Dates"
+	allowedOutgoingDatesKey = "Allowed:Outgoing:Dates"
+
+	blockedConnectionsKey = "Blocked:Connections"
+	blockedIncomingKey    = "Blocked:Incoming:Packets"
+	blockedOutgoingKey    = "Blocked:Outgoing:Packets"
+
+	blockedIncomingDatesKey = "Blocked:Incoming:Dates"
+	blockedOutgoingDatesKey = "Blocked:Outgoing:Dates"
+)
+
+// Client holds the connection to the Redis database
 type Client struct {
-	sock mangos.Socket
+	conn redis.Conn
 }
 
+// ConnectionPackets holds an incoming packet and an outgoing packet
+type ConnectionPackets struct {
+	Incoming gopacket.Packet
+	Outgoing gopacket.Packet
+}
+
+// Connect connects to the Redis database
 func Connect(url string) Client {
-	var sock mangos.Socket
-	var err error
-
-	if sock, err = req.NewSocket(); err != nil {
-		die("can't get new req socket: %s", err.Error())
-	}
-
-	sock.AddTransport(tcp.NewTransport())
-
-	if err = sock.Dial(url); err != nil {
-		die("can't dial on req socket: %s", err.Error())
-	}
+	conn := startRedis()
 
 	return Client{
-		sock: sock,
+		conn: conn,
 	}
 }
 
-func (self Client) AddTrainPacket(dataset string, allowBlock bool, incoming bool, payload []byte) {
-	var packet TrainPacket = TrainPacket{Dataset: dataset, AllowBlock: allowBlock, Incoming: incoming, Payload: payload}
+func startRedis() redis.Conn {
+	conn, _ := redis.Dial("tcp", "localhost:6379")
 
-	var value = NamedType{Name: "protocol.TrainPacket", Value: packet}
+	conn.Do("ping")
 
-	var buff = new(bytes.Buffer)
-	var bw = bufio.NewWriter(buff)
-	//  var b []byte = make([]byte, 0, 2048)
-	var h codec.Handle = NamedTypeHandle()
-
-	//  var enc *codec.Encoder = codec.NewEncoderBytes(&b, h)
-	var enc *codec.Encoder = codec.NewEncoder(bw, h)
-	var err error = enc.Encode(value)
-	if err != nil {
-		die("Error encoding packet: %s", err.Error())
-	}
-
-	bw.Flush()
-
-	self.request(buff.Bytes())
+	return conn
 }
 
-func (self Client) AddTestPacket(dataset string, incoming bool, payload []byte) {
-	var packet TestPacket = TestPacket{Dataset: dataset, Incoming: incoming, Payload: payload}
+// AddTrainPacket adds a packet to the training data set
+func (client Client) AddTrainPacket(dataset string, allowBlock bool, conn ConnectionPackets) {
+	connectionIDString := uuid.Must(uuid.NewV4())
 
-	var value = NamedType{Name: "protocol.TrainPacket", Value: packet}
+	incomingPacket := conn.Incoming
+	outgoingPacket := conn.Outgoing
 
-	var buff = new(bytes.Buffer)
-	var bw = bufio.NewWriter(buff)
-	//  var b []byte = make([]byte, 0, 2048)
-	var h codec.Handle = NamedTypeHandle()
+	var incomingPayload []byte
+	var outgoingPayload []byte
 
-	//  var enc *codec.Encoder = codec.NewEncoderBytes(&b, h)
-	var enc *codec.Encoder = codec.NewEncoder(bw, h)
-	var err error = enc.Encode(value)
-	if err != nil {
-		die("Error encoding packet: %s", err.Error())
+	var incomingTime = incomingPacket.Metadata().CaptureInfo.Timestamp.UnixNano()
+	var outgoingTime = outgoingPacket.Metadata().CaptureInfo.Timestamp.UnixNano()
+
+	if iapp := incomingPacket.ApplicationLayer(); iapp != nil {
+		incomingPayload = iapp.Payload()
 	}
 
-	bw.Flush()
+	if oapp := outgoingPacket.ApplicationLayer(); oapp != nil {
+		outgoingPayload = oapp.Payload()
+	}
 
-	self.request(buff.Bytes())
+	if allowBlock {
+		client.conn.Do("hset", allowedIncomingKey, connectionIDString, incomingPayload)
+		client.conn.Do("hset", allowedOutgoingKey, connectionIDString, outgoingPayload)
+		client.conn.Do("hset", allowedIncomingDatesKey, connectionIDString, incomingTime)
+		client.conn.Do("hset", allowedOutgoingDatesKey, connectionIDString, outgoingTime)
+		client.conn.Do("rpush", allowedConnectionsKey, connectionIDString)
+	} else {
+		client.conn.Do("hset", blockedIncomingKey, connectionIDString, incomingPayload)
+		client.conn.Do("hset", blockedOutgoingKey, connectionIDString, outgoingPayload)
+		client.conn.Do("hset", blockedIncomingDatesKey, connectionIDString, incomingTime)
+		client.conn.Do("hset", blockedOutgoingDatesKey, connectionIDString, outgoingTime)
+		client.conn.Do("rpush", blockedConnectionsKey, connectionIDString)
+	}
 }
 
-func (self Client) GetIncomingRule(dataset string) []byte {
-	var request RuleRequest = RuleRequest{Dataset: dataset, Incoming: true}
-	var b []byte = make([]byte, 0, 64)
-	var h codec.Handle = new(codec.CborHandle)
-	var enc *codec.Encoder = codec.NewEncoderBytes(&b, h)
-	var err error = enc.Encode(request)
-	if err != nil {
-		return nil
-	}
+// func (client Client) AddTestPacket(dataset string, incoming bool, payload []byte) {
+// 	var packet TestPacket = TestPacket{Dataset: dataset, Incoming: incoming, Payload: payload}
+//
+// 	var value = NamedType{Name: "protocol.TrainPacket", Value: packet}
+//
+// 	var buff = new(bytes.Buffer)
+// 	var bw = bufio.NewWriter(buff)
+// 	//  var b []byte = make([]byte, 0, 2048)
+// 	var h codec.Handle = NamedTypeHandle()
+//
+// 	//  var enc *codec.Encoder = codec.NewEncoderBytes(&b, h)
+// 	var enc *codec.Encoder = codec.NewEncoder(bw, h)
+// 	var err error = enc.Encode(value)
+// 	if err != nil {
+// 		die("Error encoding packet: %s", err.Error())
+// 	}
+//
+// 	bw.Flush()
+//
+// 	client.request(buff.Bytes())
+// }
 
-	return self.request(b)
-}
+// func (client Client) GetIncomingRule(dataset string) []byte {
+// 	var request RuleRequest = RuleRequest{Dataset: dataset, Incoming: true}
+// 	var b []byte = make([]byte, 0, 64)
+// 	var h codec.Handle = new(codec.CborHandle)
+// 	var enc *codec.Encoder = codec.NewEncoderBytes(&b, h)
+// 	var err error = enc.Encode(request)
+// 	if err != nil {
+// 		return nil
+// 	}
+//
+// 	return client.request(b)
+// }
 
-func (self Client) GetOutgoingRule(dataset string) []byte {
-	var request RuleRequest = RuleRequest{Dataset: dataset, Incoming: false}
-	var b []byte = make([]byte, 0, 64)
-	var h codec.Handle = new(codec.CborHandle)
-	var enc *codec.Encoder = codec.NewEncoderBytes(&b, h)
-	var err error = enc.Encode(request)
-	if err != nil {
-		return nil
-	}
-
-	return self.request(b)
-}
-
-func (self Client) request(data []byte) []byte {
-	var err error
-	var msg []byte
-
-	fmt.Printf("AdversaryLab client sending %d\n", len(data))
-	if err = self.sock.Send(data); err != nil {
-		die("can't send message on push socket: %s", err.Error())
-	}
-	if msg, err = self.sock.Recv(); err != nil {
-		die("can't receive date: %s", err.Error())
-	}
-	fmt.Printf("AdversaryLab client received response %s\n", string(msg))
-
-	return msg
-}
+// func (client Client) GetOutgoingRule(dataset string) []byte {
+// 	var request RuleRequest = RuleRequest{Dataset: dataset, Incoming: false}
+// 	var b []byte = make([]byte, 0, 64)
+// 	var h codec.Handle = new(codec.CborHandle)
+// 	var enc *codec.Encoder = codec.NewEncoderBytes(&b, h)
+// 	var err error = enc.Encode(request)
+// 	if err != nil {
+// 		return nil
+// 	}
+//
+// 	return client.request(b)
+// }

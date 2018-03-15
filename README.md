@@ -47,7 +47,7 @@ keep all of your Go source code and set your GOPATH:
 
 Software written in Go is installed using the `go get` command:
 
-    go get -u github.com/OperatorFoundation/AdversaryLab
+    go get -u github.com/OperatorFoundation/AdversaryLabClient
 
 This will fetch the source code for Adversary Lab, and all the
 dependencies, compile everything, and put the result in
@@ -55,7 +55,7 @@ bin/AdversaryLab.
 
 To interface with these service, you need to use the command line client.
 
-    go get -u github.com/OperatorFoundation/AdversaryLab/client-cli
+    go get -u github.com/OperatorFoundation/AdversaryLabClient/client-cli
 
 This will fetch the source code for Adversary Lab command line client, and all the
 dependencies, compile everything, and put the result in
@@ -84,4 +84,3 @@ We will also need to train the simulated adversary using captured network traffi
 This will capture live traffic with a destination port of 443 and add it to the "example" dataset as training for what traffic the adversary should block.
 
 Once the simulated adversary has both "allow" and "block" traffic, and has observed at least three connections from each type, it can synthesize blocking rules.
-

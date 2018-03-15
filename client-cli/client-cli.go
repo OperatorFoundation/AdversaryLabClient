@@ -9,26 +9,28 @@ import (
 	"strings"
 	"time"
 
-	"github.com/deckarep/golang-set"
-
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
 	"github.com/google/gopacket/pcap"
 
-	"github.com/OperatorFoundation/AdversaryLab/protocol"
+	"github.com/OperatorFoundation/AdversaryLabClient/protocol"
 )
 
 type Connection struct {
-	src layers.TCPPort
-	dst layers.TCPPort
+	small layers.TCPPort
+	big   layers.TCPPort
 }
 
 func NewConnection(packet *layers.TCP) Connection {
-	return Connection{src: packet.SrcPort, dst: packet.DstPort}
+	if packet.SrcPort < packet.DstPort {
+		return Connection{small: packet.SrcPort, big: packet.DstPort}
+	} else {
+		return Connection{small: packet.DstPort, big: packet.SrcPort}
+	}
 }
 
 func (conn Connection) CheckPort(port layers.TCPPort) bool {
-	return conn.src == port || conn.dst == port
+	return conn.small == port || conn.big == port
 }
 
 func main() {
@@ -71,9 +73,9 @@ func capture(dataset string, allowBlock bool, port *string) {
 
 	fmt.Println("Launching server...")
 
-	lab = protocol.Connect("tcp://138.197.2.243:4567")
+	lab = protocol.Connect("tcp://127.0.0.1:6379")
 
-	captured := map[Connection]gopacket.Packet{}
+	captured := map[Connection]protocol.ConnectionPackets{}
 
 	handle, pcapErr := pcap.OpenLive("en0", 1024, false, 30*time.Second)
 	if pcapErr != nil {
@@ -85,28 +87,28 @@ func capture(dataset string, allowBlock bool, port *string) {
 	packetChannel := make(chan gopacket.Packet)
 	go readPackets(packetSource, packetChannel)
 
-	stopDetecting := make(chan bool)
-	ports := mapset.NewSet()
-	go detectPorts(ports, packetChannel, captured, stopDetecting)
+	// stopDetecting := make(chan bool)
+	// ports := mapset.NewSet()
+	// go detectPorts(ports, packetChannel, captured, stopDetecting)
 
 	var selectedPort layers.TCPPort
 	var temp uint64
 
-	if port == nil {
-		fmt.Println("Press Enter to see ports.")
-		input, _ = reader.ReadString('\n')
-		stopDetecting <- true
-		fmt.Println()
-
-		portObjs := ports.ToSlice()
-		fmt.Println(portObjs)
-
-		fmt.Println("Enter port to capture:")
-		input, _ = reader.ReadString('\n')
-	} else {
-		input = *port
-		stopDetecting <- true
-	}
+	// if port == nil {
+	// 	fmt.Println("Press Enter to see ports.")
+	// 	input, _ = reader.ReadString('\n')
+	// 	stopDetecting <- true
+	// 	fmt.Println()
+	//
+	// 	portObjs := ports.ToSlice()
+	// 	fmt.Println(portObjs)
+	//
+	// 	fmt.Println("Enter port to capture:")
+	// 	input, _ = reader.ReadString('\n')
+	// } else {
+	input = *port
+	//	 stopDetecting <- true
+	// }
 
 	temp, err = strconv.ParseUint(strings.TrimSpace(input), 10, 16)
 	CheckError(err)
@@ -116,10 +118,10 @@ func capture(dataset string, allowBlock bool, port *string) {
 
 	fmt.Println("Selected port", selectedPort)
 
-	discardUnusedPorts(selectedPort, captured)
+	//	discardUnusedPorts(selectedPort, captured)
 
 	stopCapturing := make(chan bool)
-	recordable := make(chan gopacket.Packet)
+	recordable := make(chan protocol.ConnectionPackets)
 	go capturePort(selectedPort, packetChannel, captured, stopCapturing, recordable)
 	go saveCaptured(lab, dataset, allowBlock, stopCapturing, recordable, selectedPort)
 
@@ -232,46 +234,46 @@ func CheckError(err error) {
 	}
 }
 
-func detectPorts(ports mapset.Set, packetChannel chan gopacket.Packet, captured map[Connection]gopacket.Packet, stopDetecting chan bool) {
-	for {
-		select {
-		case <-stopDetecting:
-			return
-		case packet := <-packetChannel:
-			//				fmt.Println(ports)
-			fmt.Print(".")
+// func detectPorts(ports mapset.Set, packetChannel chan gopacket.Packet, captured map[Connection]protocol.ConnectionPackets, stopDetecting chan bool) {
+// 	for {
+// 		select {
+// 		case <-stopDetecting:
+// 			return
+// 		case packet := <-packetChannel:
+// 			//				fmt.Println(ports)
+// 			fmt.Print(".")
+//
+// 			// Let's see if the packet is TCP
+// 			tcpLayer := packet.Layer(layers.LayerTypeTCP)
+// 			if tcpLayer != nil {
+// 				//		        fmt.Println("TCP layer detected.")
+// 				tcp, _ := tcpLayer.(*layers.TCP)
+//
+// 				if !ports.Contains(tcp.SrcPort) {
+// 					ports.Add(tcp.SrcPort)
+// 				}
+//
+// 				if !ports.Contains(tcp.DstPort) {
+// 					ports.Add(tcp.DstPort)
+// 				}
+//
+// 				recordPacket(packet, captured, nil)
+// 			} else {
+// 				//				fmt.Println("No TCP")
+// 				//				fmt.Println(packet)
+// 			}
+// 		}
+// 	}
+// }
 
-			// Let's see if the packet is TCP
-			tcpLayer := packet.Layer(layers.LayerTypeTCP)
-			if tcpLayer != nil {
-				//		        fmt.Println("TCP layer detected.")
-				tcp, _ := tcpLayer.(*layers.TCP)
-
-				if !ports.Contains(tcp.SrcPort) {
-					ports.Add(tcp.SrcPort)
-				}
-
-				if !ports.Contains(tcp.DstPort) {
-					ports.Add(tcp.DstPort)
-				}
-
-				recordPacket(packet, captured, nil)
-			} else {
-				//				fmt.Println("No TCP")
-				//				fmt.Println(packet)
-			}
-		}
-	}
-}
-
-func capturePort(port layers.TCPPort, packetChannel chan gopacket.Packet, captured map[Connection]gopacket.Packet, stopCapturing chan bool, recordable chan gopacket.Packet) {
+func capturePort(port layers.TCPPort, packetChannel chan gopacket.Packet, captured map[Connection]protocol.ConnectionPackets, stopCapturing chan bool, recordable chan protocol.ConnectionPackets) {
 	fmt.Println("Capturing port", port)
 
 	var count uint16 = uint16(len(captured))
 
-	for _, packet := range captured {
-		recordable <- packet
-	}
+	// for _, packet := range captured {
+	// 	recordable <- packet
+	// }
 
 	for {
 		//		fmt.Println("capturing...", port, count)
@@ -294,12 +296,12 @@ func capturePort(port layers.TCPPort, packetChannel chan gopacket.Packet, captur
 					continue
 				}
 
-				recordPacket(packet, captured, recordable)
+				recordPacket(packet, captured, recordable, port)
 
 				newCount := uint16(len(captured))
 				if newCount > count {
 					count = newCount
-					fmt.Print(count)
+					//					fmt.Print(count)
 				}
 			} else {
 				// fmt.Println("No TCP")
@@ -318,49 +320,53 @@ func readPackets(packetSource *gopacket.PacketSource, packetChannel chan gopacke
 	//	fmt.Println("done reading packets")
 }
 
-func discardUnusedPorts(port layers.TCPPort, captured map[Connection]gopacket.Packet) {
-	for conn := range captured {
-		if !conn.CheckPort(port) {
-			delete(captured, conn)
-		}
-	}
-}
+// func discardUnusedPorts(port layers.TCPPort, captured map[Connection]protocol.ConnectionPackets) {
+// 	for conn := range captured {
+// 		if !conn.CheckPort(port) {
+// 			delete(captured, conn)
+// 		}
+// 	}
+// }
 
-func recordPacket(packet gopacket.Packet, captured map[Connection]gopacket.Packet, recordable chan gopacket.Packet) {
+func recordPacket(packet gopacket.Packet, captured map[Connection]protocol.ConnectionPackets, recordable chan protocol.ConnectionPackets, port layers.TCPPort) {
 	tcpLayer := packet.Layer(layers.LayerTypeTCP)
 	if tcpLayer != nil {
 		//		fmt.Println("TCP layer recorded.")
 		tcp, _ := tcpLayer.(*layers.TCP)
 		conn := NewConnection(tcp)
-		_, ok := captured[conn]
-		// Save first packet only for each new connection
+		incoming := packet.Layer(layers.LayerTypeTCP).(*layers.TCP).DstPort == port
+		connPackets, ok := captured[conn]
+
+		// This is the first packet of the connection
 		if !ok {
-			captured[conn] = packet
-			if recordable != nil {
-				fmt.Print(".")
-				recordable <- packet
+			if incoming {
+				connPackets = protocol.ConnectionPackets{Incoming: packet, Outgoing: nil}
+				captured[conn] = connPackets
+			}
+		} else { // This is the second packet of the connection
+			if !incoming && connPackets.Outgoing == nil {
+				connPackets.Outgoing = packet
+				captured[conn] = connPackets
+
+				if recordable != nil {
+					fmt.Print(".")
+					recordable <- connPackets
+				}
 			}
 		}
 	}
 }
 
-func saveCaptured(lab protocol.Client, dataset string, allowBlock bool, stopCapturing chan bool, recordable chan gopacket.Packet, port layers.TCPPort) {
+func saveCaptured(lab protocol.Client, dataset string, allowBlock bool, stopCapturing chan bool, recordable chan protocol.ConnectionPackets, port layers.TCPPort) {
 	fmt.Println("Saving captured byte sequences... ")
 
 	for {
 		select {
 		case <-stopCapturing:
 			return // FIXME - empty channel of pending packets, but don't block
-		case packet := <-recordable:
+		case connPackets := <-recordable:
 			fmt.Print("*")
-			if app := packet.ApplicationLayer(); app != nil {
-				fmt.Print("$")
-				incoming := packet.Layer(layers.LayerTypeTCP).(*layers.TCP).DstPort == port
-				data := app.Payload()
-				fmt.Println()
-				fmt.Println(data)
-				lab.AddTrainPacket(dataset, allowBlock, incoming, data)
-			}
+			lab.AddTrainPacket(dataset, allowBlock, connPackets)
 		}
 	}
 }
