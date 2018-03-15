@@ -2,7 +2,6 @@ package main
 
 import (
 	"bufio"
-	"encoding/json"
 	"fmt"
 	"os"
 	"strconv"
@@ -35,7 +34,7 @@ func (conn Connection) CheckPort(port layers.TCPPort) bool {
 
 func main() {
 	var mode string
-	var captureName string
+	//	var captureName string
 	var dataset string
 
 	if len(os.Args) < 3 {
@@ -57,8 +56,8 @@ func main() {
 		} else {
 			capture(dataset, allowBlock, nil)
 		}
-	} else if mode == "rules" {
-		rules(captureName)
+		// } else if mode == "rules" {
+		// 	rules(captureName)
 	} else {
 		usage()
 	}
@@ -164,67 +163,67 @@ type RuleSet struct {
 
 type Rule map[string]interface{}
 
-func rules(captureName string) {
-	var lab protocol.PubsubClient
-
-	lab = protocol.PubsubConnect("tcp://localhost:4568")
-
-	cache := make(map[string][2][]byte)
-
-	for currentRule := range lab.Rules {
-		name := currentRule.Dataset
-
-		var entry [2][]byte
-		var ok bool
-
-		if entry, ok = cache[name]; !ok {
-			entry = [2][]byte{make([]byte, 0), make([]byte, 0)}
-		}
-
-		if currentRule.Incoming {
-			entry[0] = currentRule.Sequence
-		} else {
-			entry[1] = currentRule.Sequence
-		}
-
-		cache[name] = entry
-
-		outgoingBytes := entry[1]
-		outgoingInts := make([]int, len(outgoingBytes))
-		for index, value := range outgoingBytes {
-			outgoingInts[index] = int(value)
-		}
-
-		incomingBytes := entry[0]
-		incomingInts := make([]int, len(incomingBytes))
-		for index, value := range incomingBytes {
-			incomingInts[index] = int(value)
-		}
-
-		// FIXME - use RequireForbid field
-		rule := make(map[string]interface{}, 4)
-		rule["rule_type"] = "adversary labs"
-		rule["action"] = "block"
-		rule["outgoing"] = outgoingInts
-		rule["incoming"] = incomingInts
-
-		rules := make([]Rule, 1)
-		rules[0] = rule
-
-		data := make(map[string]interface{}, 3)
-		data["name"] = name
-		data["target"] = name
-		data["byte_sequences"] = rules
-
-		top := make(map[string]interface{}, 1)
-		top[captureName] = data
-
-		encoded, err := json.Marshal(top)
-		CheckError(err)
-
-		fmt.Println(string(encoded))
-	}
-}
+// func rules(captureName string) {
+// 	var lab protocol.PubsubClient
+//
+// 	lab = protocol.PubsubConnect("tcp://localhost:4568")
+//
+// 	cache := make(map[string][2][]byte)
+//
+// 	for currentRule := range lab.Rules {
+// 		name := currentRule.Dataset
+//
+// 		var entry [2][]byte
+// 		var ok bool
+//
+// 		if entry, ok = cache[name]; !ok {
+// 			entry = [2][]byte{make([]byte, 0), make([]byte, 0)}
+// 		}
+//
+// 		if currentRule.Incoming {
+// 			entry[0] = currentRule.Sequence
+// 		} else {
+// 			entry[1] = currentRule.Sequence
+// 		}
+//
+// 		cache[name] = entry
+//
+// 		outgoingBytes := entry[1]
+// 		outgoingInts := make([]int, len(outgoingBytes))
+// 		for index, value := range outgoingBytes {
+// 			outgoingInts[index] = int(value)
+// 		}
+//
+// 		incomingBytes := entry[0]
+// 		incomingInts := make([]int, len(incomingBytes))
+// 		for index, value := range incomingBytes {
+// 			incomingInts[index] = int(value)
+// 		}
+//
+// 		// FIXME - use RequireForbid field
+// 		rule := make(map[string]interface{}, 4)
+// 		rule["rule_type"] = "adversary labs"
+// 		rule["action"] = "block"
+// 		rule["outgoing"] = outgoingInts
+// 		rule["incoming"] = incomingInts
+//
+// 		rules := make([]Rule, 1)
+// 		rules[0] = rule
+//
+// 		data := make(map[string]interface{}, 3)
+// 		data["name"] = name
+// 		data["target"] = name
+// 		data["byte_sequences"] = rules
+//
+// 		top := make(map[string]interface{}, 1)
+// 		top[captureName] = data
+//
+// 		encoded, err := json.Marshal(top)
+// 		CheckError(err)
+//
+// 		fmt.Println(string(encoded))
+// 	}
+// }
 
 /* A Simple function to verify error */
 func CheckError(err error) {
