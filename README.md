@@ -49,17 +49,9 @@ Software written in Go is installed using the `go get` command:
 
     go get -u github.com/OperatorFoundation/AdversaryLabClient
 
-This will fetch the source code for Adversary Lab, and all the
-dependencies, compile everything, and put the result in
-bin/AdversaryLab.
-
-To interface with these service, you need to use the command line client.
-
-    go get -u github.com/OperatorFoundation/AdversaryLabClient/client-cli
-
-This will fetch the source code for Adversary Lab command line client, and all the
-dependencies, compile everything, and put the result in
-bin/client-cli.
+This will fetch the source code for the Adversary Lab command line client, and
+all the dependencies, compile everything, and put the result in
+bin/AdversaryLabClient.
 
 #### Running
 
@@ -69,17 +61,17 @@ To interface with the AdversaryLab service, you need to use the command client.
 
 Run the command line client without argument to get usage information:
 
-    bin/client-cli
+    bin/AdversaryLabClient
 
 Train a simulated adversary using captured network traffic:
 
-    sudo bin/client-cli capture example allow 80
+    sudo bin/AdversaryLabClient capture example allow 80
 
 This will capture live traffic with a destination port of 80 and add it to the "example" dataset as training for what traffic the adversary should allow.
 
 We will also need to train the simulated adversary using captured network traffic that gives an example of what to block:
 
-    sudo bin/client-cli capture example block 443
+    sudo bin/AdversaryLabClient capture example block 443
 
 This will capture live traffic with a destination port of 443 and add it to the "example" dataset as training for what traffic the adversary should block.
 
