@@ -66,8 +66,8 @@ func (client Client) AddTrainPacket(dataset string, allowBlock bool, conn Connec
 	var incomingPayload []byte
 	var outgoingPayload []byte
 
-	var incomingTime = incomingPacket.Metadata().CaptureInfo.Timestamp.UnixNano()
-	var outgoingTime = outgoingPacket.Metadata().CaptureInfo.Timestamp.UnixNano()
+	var incomingTime = incomingPacket.Metadata().CaptureInfo.Timestamp.UnixNano() / 1000000
+	var outgoingTime = outgoingPacket.Metadata().CaptureInfo.Timestamp.UnixNano() / 1000000
 
 	if iapp := incomingPacket.ApplicationLayer(); iapp != nil {
 		incomingPayload = iapp.Payload()
