@@ -134,14 +134,12 @@ func capture(dataset string, allowBlock bool, port *string) {
 }
 
 func usage() {
-	fmt.Println("client-cli capture [protocol] [dataset] <port>")
-	fmt.Println("Example: client-cli capture testing allow")
-	fmt.Println("Example: client-cli capture testing allow 80")
-	fmt.Println("Example: client-cli capture testing block")
-	fmt.Println("Example: client-cli capture testing block 443")
+	fmt.Println("AdversaryLabClient capture [protocol] [dataset] <port>")
+	fmt.Println("Example: AdversaryLabClient capture testing allow")
+	fmt.Println("Example: AdversaryLabClient capture testing allow 80")
+	fmt.Println("Example: AdversaryLabClient capture testing block")
+	fmt.Println("Example: AdversaryLabClient capture testing block 443")
 	fmt.Println()
-	fmt.Println("client-cli rules [protocol]")
-	fmt.Println("Example: client-client rules HTTP")
 	os.Exit(1)
 }
 

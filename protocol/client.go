@@ -7,6 +7,8 @@ import (
 )
 
 const (
+	packetStatsKey = "Packet:Stats"
+
 	allowedConnectionsKey = "Allowed:Connections"
 	allowedIncomingKey    = "Allowed:Incoming:Packets"
 	allowedOutgoingKey    = "Allowed:Outgoing:Packets"
@@ -14,12 +16,16 @@ const (
 	allowedIncomingDatesKey = "Allowed:Incoming:Dates"
 	allowedOutgoingDatesKey = "Allowed:Outgoing:Dates"
 
+	allowedPacketsSeenKey = "Allowed:Connections:Seen"
+
 	blockedConnectionsKey = "Blocked:Connections"
 	blockedIncomingKey    = "Blocked:Incoming:Packets"
 	blockedOutgoingKey    = "Blocked:Outgoing:Packets"
 
 	blockedIncomingDatesKey = "Blocked:Incoming:Dates"
 	blockedOutgoingDatesKey = "Blocked:Outgoing:Dates"
+
+	blockedPacketsSeenKey = "Blocked:Connections:Seen"
 )
 
 // Client holds the connection to the Redis database
@@ -77,12 +83,14 @@ func (client Client) AddTrainPacket(dataset string, allowBlock bool, conn Connec
 		client.conn.Do("hset", allowedIncomingDatesKey, connectionIDString, incomingTime)
 		client.conn.Do("hset", allowedOutgoingDatesKey, connectionIDString, outgoingTime)
 		client.conn.Do("rpush", allowedConnectionsKey, connectionIDString)
+		client.conn.Do("hincrby", packetStatsKey, allowedPacketsSeenKey, "1")
 	} else {
 		client.conn.Do("hset", blockedIncomingKey, connectionIDString, incomingPayload)
 		client.conn.Do("hset", blockedOutgoingKey, connectionIDString, outgoingPayload)
 		client.conn.Do("hset", blockedIncomingDatesKey, connectionIDString, incomingTime)
 		client.conn.Do("hset", blockedOutgoingDatesKey, connectionIDString, outgoingTime)
 		client.conn.Do("rpush", blockedConnectionsKey, connectionIDString)
+		client.conn.Do("hincrby", packetStatsKey, blockedPacketsSeenKey, "1")
 	}
 }
 
