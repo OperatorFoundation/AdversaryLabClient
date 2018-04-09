@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bufio"
 	"fmt"
 	"os"
 	"strconv"
@@ -68,8 +67,6 @@ func capture(dataset string, allowBlock bool, port *string) {
 	var err error
 	var input string
 
-	reader := bufio.NewReader(os.Stdin)
-
 	fmt.Println("Launching server...")
 
 	lab = protocol.Connect("tcp://127.0.0.1:6379")
@@ -93,21 +90,7 @@ func capture(dataset string, allowBlock bool, port *string) {
 	var selectedPort layers.TCPPort
 	var temp uint64
 
-	// if port == nil {
-	// 	fmt.Println("Press Enter to see ports.")
-	// 	input, _ = reader.ReadString('\n')
-	// 	stopDetecting <- true
-	// 	fmt.Println()
-	//
-	// 	portObjs := ports.ToSlice()
-	// 	fmt.Println(portObjs)
-	//
-	// 	fmt.Println("Enter port to capture:")
-	// 	input, _ = reader.ReadString('\n')
-	// } else {
 	input = *port
-	//	 stopDetecting <- true
-	// }
 
 	temp, err = strconv.ParseUint(strings.TrimSpace(input), 10, 16)
 	CheckError(err)
@@ -123,14 +106,6 @@ func capture(dataset string, allowBlock bool, port *string) {
 	recordable := make(chan protocol.ConnectionPackets)
 	go capturePort(selectedPort, packetChannel, captured, stopCapturing, recordable)
 	go saveCaptured(lab, dataset, allowBlock, stopCapturing, recordable, selectedPort)
-
-	fmt.Println("Press Enter to stop capturing.")
-	_, _ = reader.ReadString('\n')
-	stopCapturing <- true
-	fmt.Println()
-
-	handle.Close()
-	os.Exit(0)
 }
 
 func usage() {
