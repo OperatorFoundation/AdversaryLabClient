@@ -96,16 +96,10 @@ func capture(dataset string, allowBlock bool, port *string) {
 	CheckError(err)
 	selectedPort = layers.TCPPort(temp)
 
-	fmt.Println("Read port.")
-
-	fmt.Println("Selected port", selectedPort)
-
-	//	discardUnusedPorts(selectedPort, captured)
-
 	stopCapturing := make(chan bool)
 	recordable := make(chan protocol.ConnectionPackets)
 	go capturePort(selectedPort, packetChannel, captured, stopCapturing, recordable)
-	go saveCaptured(lab, dataset, allowBlock, stopCapturing, recordable, selectedPort)
+	saveCaptured(lab, dataset, allowBlock, stopCapturing, recordable, selectedPort)
 }
 
 func usage() {
