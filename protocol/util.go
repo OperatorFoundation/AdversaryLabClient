@@ -1,8 +1,8 @@
 package protocol
 
 import (
-  "os"
-  "fmt"
+	"fmt"
+	"os"
 )
 
 func CheckError(err error) {
@@ -10,9 +10,4 @@ func CheckError(err error) {
 		fmt.Println("Error: ", err)
 		os.Exit(0)
 	}
-}
-
-func die(format string, v ...interface{}) {
-	fmt.Fprintln(os.Stderr, fmt.Sprintf(format, v...))
-	os.Exit(1)
 }

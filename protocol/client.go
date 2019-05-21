@@ -1,6 +1,7 @@
 package protocol
 
 import (
+	"fmt"
 	"github.com/garyburd/redigo/redis"
 	"github.com/google/gopacket"
 	"github.com/satori/go.uuid"
@@ -43,7 +44,7 @@ type ConnectionPackets struct {
 }
 
 // Connect connects to the Redis database
-func Connect(url string) Client {
+func Connect() Client {
 	conn := startRedis()
 
 	return Client{
@@ -54,7 +55,12 @@ func Connect(url string) Client {
 func startRedis() redis.Conn {
 	conn, _ := redis.Dial("tcp", "localhost:6379")
 
-	conn.Do("ping")
+	reply, err := conn.Do("ping")
+	if err == nil {
+		fmt.Println("Successful ping to Redis server: ", reply)
+	} else {
+		fmt.Println("Redis error: ", err)
+	}
 
 	return conn
 }
@@ -81,21 +87,21 @@ func (client Client) AddTrainPacket(dataset string, allowBlock bool, conn Connec
 	}
 
 	if allowBlock {
-		client.conn.Do("hset", allowedIncomingKey, connectionIDString, incomingPayload)
-		client.conn.Do("hset", allowedOutgoingKey, connectionIDString, outgoingPayload)
-		client.conn.Do("hset", allowedIncomingDatesKey, connectionIDString, incomingTime)
-		client.conn.Do("hset", allowedOutgoingDatesKey, connectionIDString, outgoingTime)
-		client.conn.Do("rpush", allowedConnectionsKey, connectionIDString)
-		client.conn.Do("hincrby", packetStatsKey, allowedPacketsSeenKey, "1")
-		client.conn.Do("publish", pubsubChannel, pubsubMessage)
+		_, _ = client.conn.Do("hset", allowedIncomingKey, connectionIDString, incomingPayload)
+		_, _ = client.conn.Do("hset", allowedOutgoingKey, connectionIDString, outgoingPayload)
+		_, _ = client.conn.Do("hset", allowedIncomingDatesKey, connectionIDString, incomingTime)
+		_, _ = client.conn.Do("hset", allowedOutgoingDatesKey, connectionIDString, outgoingTime)
+		_, _ = client.conn.Do("rpush", allowedConnectionsKey, connectionIDString)
+		_, _ = client.conn.Do("hincrby", packetStatsKey, allowedPacketsSeenKey, "1")
+		_, _ = client.conn.Do("publish", pubsubChannel, pubsubMessage)
 	} else {
-		client.conn.Do("hset", blockedIncomingKey, connectionIDString, incomingPayload)
-		client.conn.Do("hset", blockedOutgoingKey, connectionIDString, outgoingPayload)
-		client.conn.Do("hset", blockedIncomingDatesKey, connectionIDString, incomingTime)
-		client.conn.Do("hset", blockedOutgoingDatesKey, connectionIDString, outgoingTime)
-		client.conn.Do("rpush", blockedConnectionsKey, connectionIDString)
-		client.conn.Do("hincrby", packetStatsKey, blockedPacketsSeenKey, "1")
-		client.conn.Do("publish", pubsubChannel, pubsubMessage)
+		_, _ = client.conn.Do("hset", blockedIncomingKey, connectionIDString, incomingPayload)
+		_, _ = client.conn.Do("hset", blockedOutgoingKey, connectionIDString, outgoingPayload)
+		_, _ = client.conn.Do("hset", blockedIncomingDatesKey, connectionIDString, incomingTime)
+		_, _ = client.conn.Do("hset", blockedOutgoingDatesKey, connectionIDString, outgoingTime)
+		_, _ = client.conn.Do("rpush", blockedConnectionsKey, connectionIDString)
+		_, _ = client.conn.Do("hincrby", packetStatsKey, blockedPacketsSeenKey, "1")
+		_, _ = client.conn.Do("publish", pubsubChannel, pubsubMessage)
 	}
 }
 

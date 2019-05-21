@@ -45,7 +45,7 @@ func main() {
 	if mode == "capture" {
 		dataset = os.Args[2]
 
-		var allowBlock bool = false
+		var allowBlock = false
 		if os.Args[3] == "allow" {
 			allowBlock = true
 		}
@@ -69,13 +69,15 @@ func capture(dataset string, allowBlock bool, port *string) {
 
 	fmt.Println("Launching server...")
 
-	lab = protocol.Connect("tcp://127.0.0.1:6379")
+	lab = protocol.Connect()
 
 	captured := map[Connection]protocol.ConnectionPackets{}
 
 	handle, pcapErr := pcap.OpenLive("en0", 1024, false, 30*time.Second)
 	if pcapErr != nil {
-		handle.Close()
+		if handle != nil {
+			handle.Close()
+		}
 		os.Exit(1)
 	}
 
@@ -99,7 +101,7 @@ func capture(dataset string, allowBlock bool, port *string) {
 	stopCapturing := make(chan bool)
 	recordable := make(chan protocol.ConnectionPackets)
 	go capturePort(selectedPort, packetChannel, captured, stopCapturing, recordable)
-	saveCaptured(lab, dataset, allowBlock, stopCapturing, recordable, selectedPort)
+	saveCaptured(lab, dataset, allowBlock, stopCapturing, recordable)
 }
 
 func usage() {
@@ -112,86 +114,6 @@ func usage() {
 	os.Exit(1)
 }
 
-// Example:
-// {"OpenVPN" : {
-//   "name":"OpenVPN",
-//   "target":"OpenVPN",
-//   "byte_sequences" : [
-//      {"rule_type":"adversary labs",
-//       "action":"block",
-//       "outgoing": [72, 84, 84, 80, 47, 49, 46, 49, 32, 50, 48, 48, 32,
-// 79, 75, 13, 10],
-//       "incoming": [71, 69, 84, 32, 47]}]}}
-type RuleSet struct {
-	name           string
-	target         string
-	byte_sequences []Rule
-}
-
-type Rule map[string]interface{}
-
-// func rules(captureName string) {
-// 	var lab protocol.PubsubClient
-//
-// 	lab = protocol.PubsubConnect("tcp://localhost:4568")
-//
-// 	cache := make(map[string][2][]byte)
-//
-// 	for currentRule := range lab.Rules {
-// 		name := currentRule.Dataset
-//
-// 		var entry [2][]byte
-// 		var ok bool
-//
-// 		if entry, ok = cache[name]; !ok {
-// 			entry = [2][]byte{make([]byte, 0), make([]byte, 0)}
-// 		}
-//
-// 		if currentRule.Incoming {
-// 			entry[0] = currentRule.Sequence
-// 		} else {
-// 			entry[1] = currentRule.Sequence
-// 		}
-//
-// 		cache[name] = entry
-//
-// 		outgoingBytes := entry[1]
-// 		outgoingInts := make([]int, len(outgoingBytes))
-// 		for index, value := range outgoingBytes {
-// 			outgoingInts[index] = int(value)
-// 		}
-//
-// 		incomingBytes := entry[0]
-// 		incomingInts := make([]int, len(incomingBytes))
-// 		for index, value := range incomingBytes {
-// 			incomingInts[index] = int(value)
-// 		}
-//
-// 		// FIXME - use RequireForbid field
-// 		rule := make(map[string]interface{}, 4)
-// 		rule["rule_type"] = "adversary labs"
-// 		rule["action"] = "block"
-// 		rule["outgoing"] = outgoingInts
-// 		rule["incoming"] = incomingInts
-//
-// 		rules := make([]Rule, 1)
-// 		rules[0] = rule
-//
-// 		data := make(map[string]interface{}, 3)
-// 		data["name"] = name
-// 		data["target"] = name
-// 		data["byte_sequences"] = rules
-//
-// 		top := make(map[string]interface{}, 1)
-// 		top[captureName] = data
-//
-// 		encoded, err := json.Marshal(top)
-// 		CheckError(err)
-//
-// 		fmt.Println(string(encoded))
-// 	}
-// }
-
 /* A Simple function to verify error */
 func CheckError(err error) {
 	if err != nil {
@@ -200,42 +122,10 @@ func CheckError(err error) {
 	}
 }
 
-// func detectPorts(ports mapset.Set, packetChannel chan gopacket.Packet, captured map[Connection]protocol.ConnectionPackets, stopDetecting chan bool) {
-// 	for {
-// 		select {
-// 		case <-stopDetecting:
-// 			return
-// 		case packet := <-packetChannel:
-// 			//				fmt.Println(ports)
-// 			fmt.Print(".")
-//
-// 			// Let's see if the packet is TCP
-// 			tcpLayer := packet.Layer(layers.LayerTypeTCP)
-// 			if tcpLayer != nil {
-// 				//		        fmt.Println("TCP layer detected.")
-// 				tcp, _ := tcpLayer.(*layers.TCP)
-//
-// 				if !ports.Contains(tcp.SrcPort) {
-// 					ports.Add(tcp.SrcPort)
-// 				}
-//
-// 				if !ports.Contains(tcp.DstPort) {
-// 					ports.Add(tcp.DstPort)
-// 				}
-//
-// 				recordPacket(packet, captured, nil)
-// 			} else {
-// 				//				fmt.Println("No TCP")
-// 				//				fmt.Println(packet)
-// 			}
-// 		}
-// 	}
-// }
-
 func capturePort(port layers.TCPPort, packetChannel chan gopacket.Packet, captured map[Connection]protocol.ConnectionPackets, stopCapturing chan bool, recordable chan protocol.ConnectionPackets) {
 	fmt.Println("Capturing port", port)
 
-	var count uint16 = uint16(len(captured))
+	var count = uint16(len(captured))
 
 	// for _, packet := range captured {
 	// 	recordable <- packet
@@ -323,7 +213,7 @@ func recordPacket(packet gopacket.Packet, captured map[Connection]protocol.Conne
 	}
 }
 
-func saveCaptured(lab protocol.Client, dataset string, allowBlock bool, stopCapturing chan bool, recordable chan protocol.ConnectionPackets, port layers.TCPPort) {
+func saveCaptured(lab protocol.Client, dataset string, allowBlock bool, stopCapturing chan bool, recordable chan protocol.ConnectionPackets) {
 	fmt.Println("Saving captured byte sequences... ")
 
 	for {
