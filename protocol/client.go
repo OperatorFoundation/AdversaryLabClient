@@ -26,6 +26,9 @@ const (
 	blockedOutgoingDatesKey = "Blocked:Outgoing:Dates"
 
 	blockedPacketsSeenKey = "Blocked:Connections:Seen"
+
+	pubsubChannel = "New:Connections:Channel"
+	pubsubMessage = "NewConnectionAdded"
 )
 
 // Client holds the connection to the Redis database
@@ -84,6 +87,7 @@ func (client Client) AddTrainPacket(dataset string, allowBlock bool, conn Connec
 		client.conn.Do("hset", allowedOutgoingDatesKey, connectionIDString, outgoingTime)
 		client.conn.Do("rpush", allowedConnectionsKey, connectionIDString)
 		client.conn.Do("hincrby", packetStatsKey, allowedPacketsSeenKey, "1")
+		client.conn.Do("publish", pubsubChannel, pubsubMessage)
 	} else {
 		client.conn.Do("hset", blockedIncomingKey, connectionIDString, incomingPayload)
 		client.conn.Do("hset", blockedOutgoingKey, connectionIDString, outgoingPayload)
@@ -91,6 +95,7 @@ func (client Client) AddTrainPacket(dataset string, allowBlock bool, conn Connec
 		client.conn.Do("hset", blockedOutgoingDatesKey, connectionIDString, outgoingTime)
 		client.conn.Do("rpush", blockedConnectionsKey, connectionIDString)
 		client.conn.Do("hincrby", packetStatsKey, blockedPacketsSeenKey, "1")
+		client.conn.Do("publish", pubsubChannel, pubsubMessage)
 	}
 }
 
