@@ -53,7 +53,7 @@ func Connect() Client {
 }
 
 func startRedis() redis.Conn {
-	conn, _ := redis.Dial("tcp", "localhost:6379")
+	conn, _ := redis.Dial("tcp", "localhost:6380")
 
 	reply, err := conn.Do("ping")
 	if err == nil {
