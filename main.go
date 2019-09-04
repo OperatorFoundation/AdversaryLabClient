@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -32,6 +33,7 @@ func (conn Connection) CheckPort(port layers.TCPPort) bool {
 }
 
 func main() {
+	fmt.Println("Adversary Lab Client is running...")
 	var mode string
 	//	var captureName string
 	var dataset string
@@ -73,12 +75,26 @@ func capture(dataset string, allowBlock bool, port *string) {
 
 	captured := map[Connection]protocol.ConnectionPackets{}
 
-	handle, pcapErr := pcap.OpenLive("en0", 1024, false, 30*time.Second)
-	if pcapErr != nil {
-		if handle != nil {
-			handle.Close()
+	var handle *pcap.Handle
+	var pcapErr error
+
+	switch runtime.GOOS {
+	case "darwin":
+		handle, pcapErr = pcap.OpenLive("en0", 1024, false, 30*time.Second)
+		if pcapErr != nil {
+			if handle != nil {
+				handle.Close()
+			}
+			os.Exit(1)
 		}
-		os.Exit(1)
+	default:
+		handle, pcapErr = pcap.OpenLive("eth0", 1024, false, 30*time.Second)
+		if pcapErr != nil {
+			if handle != nil {
+				handle.Close()
+			}
+			os.Exit(1)
+		}
 	}
 
 	packetSource := gopacket.NewPacketSource(handle, handle.LinkType())
