@@ -158,7 +158,7 @@ func capturePort(port layers.TCPPort, packetChannel chan gopacket.Packet, captur
 			return
 		case packet := <-packetChannel:
 			//			fmt.Print(".")
-			fmt.Println(packet)
+			//fmt.Println(packet)
 
 			// Let's see if the packet is TCP
 			tcpLayer := packet.Layer(layers.LayerTypeTCP)
