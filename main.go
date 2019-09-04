@@ -184,12 +184,12 @@ func capturePort(port layers.TCPPort, packetChannel chan gopacket.Packet, captur
 }
 
 func readPackets(packetSource *gopacket.PacketSource, packetChannel chan gopacket.Packet) {
-	//	fmt.Println("reading packets")
+	fmt.Println("reading packets")
 	for packet := range packetSource.Packets() {
-		//		fmt.Println("readPacket")
+		fmt.Println("readPacket")
 		packetChannel <- packet
 	}
-	//	fmt.Println("done reading packets")
+	fmt.Println("done reading packets")
 }
 
 // func discardUnusedPorts(port layers.TCPPort, captured map[Connection]protocol.ConnectionPackets) {
@@ -203,7 +203,7 @@ func readPackets(packetSource *gopacket.PacketSource, packetChannel chan gopacke
 func recordPacket(packet gopacket.Packet, captured map[Connection]protocol.ConnectionPackets, recordable chan protocol.ConnectionPackets, port layers.TCPPort) {
 	tcpLayer := packet.Layer(layers.LayerTypeTCP)
 	if tcpLayer != nil {
-		//		fmt.Println("TCP layer recorded.")
+		fmt.Println("TCP layer recorded.")
 		tcp, _ := tcpLayer.(*layers.TCP)
 		conn := NewConnection(tcp)
 		incoming := packet.Layer(layers.LayerTypeTCP).(*layers.TCP).DstPort == port
