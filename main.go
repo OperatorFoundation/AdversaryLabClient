@@ -82,6 +82,8 @@ func capture(dataset string, allowBlock bool, port *string) {
 	case "darwin":
 		handle, pcapErr = pcap.OpenLive("en0", 1024, false, 30*time.Second)
 		if pcapErr != nil {
+			fmt.Println("Error opening network device:")
+			fmt.Println(pcapErr)
 			if handle != nil {
 				handle.Close()
 			}
@@ -90,6 +92,8 @@ func capture(dataset string, allowBlock bool, port *string) {
 	default:
 		handle, pcapErr = pcap.OpenLive("eth0", 1024, false, 30*time.Second)
 		if pcapErr != nil {
+			fmt.Println("Error opening network device:")
+			fmt.Println(pcapErr)
 			if handle != nil {
 				handle.Close()
 			}
@@ -154,7 +158,7 @@ func capturePort(port layers.TCPPort, packetChannel chan gopacket.Packet, captur
 			return
 		case packet := <-packetChannel:
 			//			fmt.Print(".")
-			//				fmt.Println(packet)
+			fmt.Println(packet)
 
 			// Let's see if the packet is TCP
 			tcpLayer := packet.Layer(layers.LayerTypeTCP)
