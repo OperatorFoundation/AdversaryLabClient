@@ -215,19 +215,25 @@ func recordPacket(packet gopacket.Packet, captured map[Connection]protocol.Conne
 
 		// This is the first packet of the connection
 		if !ok {
+			fmt.Println("First packet recorded.")
 			if incoming {
 				connPackets = protocol.ConnectionPackets{Incoming: packet, Outgoing: nil}
 				captured[conn] = connPackets
 			}
 		} else { // This is the second packet of the connection
+			fmt.Println("Not first packet seen.")
 			if !incoming && connPackets.Outgoing == nil {
+				fmt.Println("Second packet seen.")
 				connPackets.Outgoing = packet
 				captured[conn] = connPackets
 
 				if recordable != nil {
 					fmt.Print(".")
 					recordable <- connPackets
+				} else {
+					fmt.Println("Second packet seen channel is closed.")
 				}
+
 			}
 		}
 	}
