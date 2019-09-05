@@ -190,7 +190,7 @@ func capturePort(port layers.TCPPort, packetChannel chan gopacket.Packet, captur
 func readPackets(packetSource *gopacket.PacketSource, packetChannel chan gopacket.Packet) {
 	fmt.Println("reading packets")
 	for packet := range packetSource.Packets() {
-		fmt.Println("readPacket")
+		//fmt.Println("readPacket")
 		packetChannel <- packet
 	}
 	fmt.Println("done reading packets")
@@ -207,7 +207,7 @@ func readPackets(packetSource *gopacket.PacketSource, packetChannel chan gopacke
 func recordPacket(packet gopacket.Packet, captured map[Connection]protocol.ConnectionPackets, recordable chan protocol.ConnectionPackets, port layers.TCPPort) {
 	tcpLayer := packet.Layer(layers.LayerTypeTCP)
 	if tcpLayer != nil {
-		fmt.Println("TCP layer recorded.")
+		//fmt.Println("TCP layer recorded.")
 		tcp, _ := tcpLayer.(*layers.TCP)
 		conn := NewConnection(tcp)
 		incoming := packet.Layer(layers.LayerTypeTCP).(*layers.TCP).DstPort == port
@@ -221,7 +221,6 @@ func recordPacket(packet gopacket.Packet, captured map[Connection]protocol.Conne
 				captured[conn] = connPackets
 			}
 		} else { // This is the second packet of the connection
-			fmt.Println("Not first packet seen.")
 			if !incoming && connPackets.Outgoing == nil {
 				fmt.Println("Second packet seen.")
 				connPackets.Outgoing = packet
