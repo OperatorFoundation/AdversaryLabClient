@@ -66,7 +66,7 @@ func startRedis() redis.Conn {
 }
 
 // AddTrainPacket adds a packet to the training data set
-func (client Client) AddTrainPacket(dataset string, allowBlock bool, conn ConnectionPackets) {
+func (client Client) AddTrainPacket(allowBlock bool, conn ConnectionPackets) {
 	connectionIDString := uuid.Must(uuid.NewV4())
 
 	incomingPacket := conn.Incoming

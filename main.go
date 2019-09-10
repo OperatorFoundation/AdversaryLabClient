@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
 	"os"
 	"runtime"
@@ -34,37 +35,54 @@ func (conn Connection) CheckPort(port layers.TCPPort) bool {
 
 func main() {
 	fmt.Println("Adversary Lab Client is running...")
-	var mode string
-	//	var captureName string
-	var dataset string
+	var allowBlock bool
+	var allowBlockChannel = make(chan bool)
 
-	if len(os.Args) < 3 {
+	if len(os.Args) < 2 {
 		usage()
+		return
 	}
 
-	mode = os.Args[1]
+	port := os.Args[1]
 
-	if mode == "capture" {
-		dataset = os.Args[2]
+	if len(os.Args) == 2 {
+		//streamMode = false
+		var allowBlockWasSet = false
+		go capture(port, allowBlockChannel, nil)
 
-		var allowBlock = false
-		if os.Args[3] == "allow" {
+		for allowBlockWasSet == false {
+			fmt.Print("Type allow or block when you are done recording: ")
+			reader := bufio.NewReader(os.Stdin)
+			text, _ := reader.ReadString('\n')
+			text = strings.Replace(text, "\n", "", -1)
+			if text == "allow" {
+				allowBlock = true
+				allowBlockWasSet = true
+			} else if text == "block" {
+				allowBlock = false
+				allowBlockWasSet = true
+			}
+		}
+
+		// This tells us that we are done recording and the buffered packets
+		// are either allowed or blocked based on user input.
+		allowBlockChannel<-allowBlock
+
+	} else if len(os.Args) == 3 {
+		//streamMode = true
+
+		if os.Args[2] == "allow" {
 			allowBlock = true
 		}
 
-		if len(os.Args) > 4 {
-			capture(dataset, allowBlock, &os.Args[4])
-		} else {
-			capture(dataset, allowBlock, nil)
-		}
-		// } else if mode == "rules" {
-		// 	rules(captureName)
+		capture(port, allowBlockChannel, &allowBlock)
 	} else {
 		usage()
+		return
 	}
 }
 
-func capture(dataset string, allowBlock bool, port *string) {
+func capture(port string, allowBlockChannel chan bool, allowBlock *bool) {
 	var lab protocol.Client
 	var err error
 	var input string
@@ -112,24 +130,24 @@ func capture(dataset string, allowBlock bool, port *string) {
 	var selectedPort layers.TCPPort
 	var temp uint64
 
-	input = *port
+	input = port
 
 	temp, err = strconv.ParseUint(strings.TrimSpace(input), 10, 16)
 	CheckError(err)
 	selectedPort = layers.TCPPort(temp)
 
-	stopCapturing := make(chan bool)
 	recordable := make(chan protocol.ConnectionPackets)
-	go capturePort(selectedPort, packetChannel, captured, stopCapturing, recordable)
-	saveCaptured(lab, dataset, allowBlock, stopCapturing, recordable)
+
+	go capturePort(selectedPort, packetChannel, captured, allowBlockChannel, recordable)
+	saveCaptured(lab, allowBlock, allowBlockChannel, recordable)
 }
 
 func usage() {
-	fmt.Println("AdversaryLabClient capture [protocol] [dataset] <port>")
-	fmt.Println("Example: AdversaryLabClient capture testing allow")
-	fmt.Println("Example: AdversaryLabClient capture testing allow 80")
-	fmt.Println("Example: AdversaryLabClient capture testing block")
-	fmt.Println("Example: AdversaryLabClient capture testing block 443")
+	fmt.Println("AdversaryLabClient <port> [protocol]")
+	fmt.Println("Example: AdversaryLabClient 80 allow")
+	fmt.Println("Example: AdversaryLabClient 443 block")
+	fmt.Println("Example: AdversaryLabClient 80")
+	fmt.Println("Example: AdversaryLabClient 443")
 	fmt.Println()
 	os.Exit(1)
 }
@@ -162,13 +180,13 @@ func capturePort(port layers.TCPPort, packetChannel chan gopacket.Packet, captur
 
 			// Let's see if the packet is TCP
 			tcpLayer := packet.Layer(layers.LayerTypeTCP)
-			app := packet.ApplicationLayer()
+			var app = packet.ApplicationLayer()
 			if tcpLayer != nil && app != nil {
 				//		        fmt.Println("TCP layer captured.")
 				tcp, _ := tcpLayer.(*layers.TCP)
 
 				conn := NewConnection(tcp)
-				if !conn.CheckPort(layers.TCPPort(port)) {
+				if !conn.CheckPort(port) {
 					continue
 				}
 
@@ -238,16 +256,29 @@ func recordPacket(packet gopacket.Packet, captured map[Connection]protocol.Conne
 	}
 }
 
-func saveCaptured(lab protocol.Client, dataset string, allowBlock bool, stopCapturing chan bool, recordable chan protocol.ConnectionPackets) {
+func saveCaptured(lab protocol.Client, allowBlock *bool, stopCapturing chan bool, recordable chan protocol.ConnectionPackets) {
 	fmt.Println("Saving captured byte sequences... ")
+
+	// Use the buffer if we are not in streaming mode
+	buffer := make([]protocol.ConnectionPackets, 0)
 
 	for {
 		select {
-		case <-stopCapturing:
-			return // FIXME - empty channel of pending packets, but don't block
+		case newAllowBlock := <-stopCapturing:
+			// Save buffered packets and quit
+			for _, packet := range buffer{
+				fmt.Print("*")
+				lab.AddTrainPacket(newAllowBlock, packet)
+			}
+			os.Exit(1)
 		case connPackets := <-recordable:
-			fmt.Print("*")
-			lab.AddTrainPacket(dataset, allowBlock, connPackets)
+			if allowBlock == nil{
+				buffer = append(buffer, connPackets)
+			} else {
+				fmt.Print("*")
+				lab.AddTrainPacket(*allowBlock, connPackets)
+			}
 		}
 	}
+
 }
