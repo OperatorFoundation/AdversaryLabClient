@@ -4,7 +4,8 @@ import (
 	"fmt"
 	"github.com/garyburd/redigo/redis"
 	"github.com/google/gopacket"
-	"github.com/satori/go.uuid"
+	"strconv"
+	"time"
 )
 
 const (
@@ -57,18 +58,34 @@ func startRedis() redis.Conn {
 
 	reply, err := conn.Do("ping")
 	if err == nil {
-		fmt.Println("Successful ping to Redis server: ", reply)
+		fmt.Println("-> Successful ping to Redis server: ", reply)
 	} else {
-		fmt.Println("Redis error: ", err)
+		fmt.Println("-> Redis error: ", err)
 	}
 
 	return conn
 }
-
+func makeConnectionID() string {
+	currentTime := time.Now()
+	timeNumber := currentTime.UnixNano()
+	connectionID := strconv.Itoa(int(timeNumber))
+	return connectionID
+}
 // AddTrainPacket adds a packet to the training data set
 func (client Client) AddTrainPacket(allowBlock bool, conn ConnectionPackets) {
-	connectionIDString := uuid.Must(uuid.NewV4())
+	// This causes a panic when called from saveCaptured() newAllowBlock case
+	// Caused by random number generator receiving an error
+	//connectionID, uuidError := uuid.NewUUID()
+	//connectionIDString := connectionID.String()
+	//
+	//
+	//if uuidError != nil {
+	//	println("Error generating a UUID exiting AddTrainPacket:")
+	//	println(uuidError)
+	//	return
+	//}
 
+	connectionIDString := makeConnectionID()
 	incomingPacket := conn.Incoming
 	outgoingPacket := conn.Outgoing
 

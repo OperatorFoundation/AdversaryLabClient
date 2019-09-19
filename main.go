@@ -34,7 +34,7 @@ func (conn Connection) CheckPort(port layers.TCPPort) bool {
 }
 
 func main() {
-	fmt.Println("Adversary Lab Client is running...")
+	fmt.Println("-> Adversary Lab Client is running...")
 	var allowBlock bool
 	var allowBlockChannel = make(chan bool)
 
@@ -46,33 +46,20 @@ func main() {
 	port := os.Args[1]
 
 	if len(os.Args) == 2 {
-		//streamMode = false
-		var allowBlockWasSet = false
-		go capture(port, allowBlockChannel, nil)
-
-		for allowBlockWasSet == false {
-			fmt.Print("Type allow or block when you are done recording: ")
-			reader := bufio.NewReader(os.Stdin)
-			text, _ := reader.ReadString('\n')
-			text = strings.Replace(text, "\n", "", -1)
-			if text == "allow" {
-				allowBlock = true
-				allowBlockWasSet = true
-			} else if text == "block" {
-				allowBlock = false
-				allowBlockWasSet = true
-			}
-		}
-
-		// This tells us that we are done recording and the buffered packets
-		// are either allowed or blocked based on user input.
-		allowBlockChannel<-allowBlock
-
+		// The user has not yet indicated which category this data belongs to.
+		// Buffer the data until the user enters 'allowed' or 'blocked'.
+		go listenForDataCategory(allowBlock, allowBlockChannel)
+		capture(port, allowBlockChannel, nil)
 	} else if len(os.Args) == 3 {
-		//streamMode = true
-
+		// The user has indicated how this data should be categorized.
+		// Save the data as we go using the indicated category.
 		if os.Args[2] == "allow" {
 			allowBlock = true
+		} else if os.Args[2] == "block" {
+			allowBlock = false
+		} else {
+			usage()
+			return
 		}
 
 		capture(port, allowBlockChannel, &allowBlock)
@@ -82,12 +69,38 @@ func main() {
 	}
 }
 
+func listenForDataCategory(allowBlock bool, allowBlockChannel chan bool) {
+	var allowBlockWasSet = false
+
+	for allowBlockWasSet == false {
+		fmt.Print("-> Type 'allow' or 'block' when you are done recording <-\n")
+		reader := bufio.NewReader(os.Stdin)
+		text, _ := reader.ReadString('\n')
+		text = strings.Replace(text, "\n", "", -1)
+		if text == "allow" {
+			fmt.Println("-> This packet data will be saved as allowed.")
+			allowBlock = true
+			allowBlockWasSet = true
+		} else if text == "block" {
+			fmt.Println("-> This packet data will be saved as blocked.")
+			allowBlock = false
+			allowBlockWasSet = true
+		} else {
+			fmt.Printf("-> Received unexpected input for the connection data category please enter 'allowed' or 'blocked':\n %s", text)
+		}
+	}
+
+	// This tells us that we are done recording and the buffered packets
+	// are either allowed or blocked based on user input.
+	allowBlockChannel<-allowBlock
+}
+
 func capture(port string, allowBlockChannel chan bool, allowBlock *bool) {
 	var lab protocol.Client
 	var err error
 	var input string
 
-	fmt.Println("Launching server...")
+	fmt.Println("-> Launching server...")
 
 	lab = protocol.Connect()
 
@@ -100,7 +113,7 @@ func capture(port string, allowBlockChannel chan bool, allowBlock *bool) {
 	case "darwin":
 		handle, pcapErr = pcap.OpenLive("en0", 1024, false, 30*time.Second)
 		if pcapErr != nil {
-			fmt.Println("Error opening network device:")
+			fmt.Println("-> Error opening network device:")
 			fmt.Println(pcapErr)
 			if handle != nil {
 				handle.Close()
@@ -110,7 +123,7 @@ func capture(port string, allowBlockChannel chan bool, allowBlock *bool) {
 	default:
 		handle, pcapErr = pcap.OpenLive("eth0", 1024, false, 30*time.Second)
 		if pcapErr != nil {
-			fmt.Println("Error opening network device:")
+			fmt.Println("-> Error opening network device:")
 			fmt.Println(pcapErr)
 			if handle != nil {
 				handle.Close()
@@ -143,11 +156,11 @@ func capture(port string, allowBlockChannel chan bool, allowBlock *bool) {
 }
 
 func usage() {
-	fmt.Println("AdversaryLabClient <port> [protocol]")
-	fmt.Println("Example: AdversaryLabClient 80 allow")
-	fmt.Println("Example: AdversaryLabClient 443 block")
-	fmt.Println("Example: AdversaryLabClient 80")
-	fmt.Println("Example: AdversaryLabClient 443")
+	fmt.Println("-> AdversaryLabClient <port> [protocol]")
+	fmt.Println("-> Example: AdversaryLabClient 80 allow")
+	fmt.Println("-> Example: AdversaryLabClient 443 block")
+	fmt.Println("-> Example: AdversaryLabClient 80")
+	fmt.Println("-> Example: AdversaryLabClient 443")
 	fmt.Println()
 	os.Exit(1)
 }
@@ -161,7 +174,7 @@ func CheckError(err error) {
 }
 
 func capturePort(port layers.TCPPort, packetChannel chan gopacket.Packet, captured map[Connection]protocol.ConnectionPackets, stopCapturing chan bool, recordable chan protocol.ConnectionPackets) {
-	fmt.Println("Capturing port", port)
+	fmt.Println("-> Capturing port", port)
 
 	var count = uint16(len(captured))
 
@@ -206,12 +219,9 @@ func capturePort(port layers.TCPPort, packetChannel chan gopacket.Packet, captur
 }
 
 func readPackets(packetSource *gopacket.PacketSource, packetChannel chan gopacket.Packet) {
-	fmt.Println("reading packets")
 	for packet := range packetSource.Packets() {
-		//fmt.Println("readPacket")
 		packetChannel <- packet
 	}
-	fmt.Println("done reading packets")
 }
 
 // func discardUnusedPorts(port layers.TCPPort, captured map[Connection]protocol.ConnectionPackets) {
@@ -233,22 +243,20 @@ func recordPacket(packet gopacket.Packet, captured map[Connection]protocol.Conne
 
 		// This is the first packet of the connection
 		if !ok {
-			fmt.Println("First packet recorded.")
 			if incoming {
 				connPackets = protocol.ConnectionPackets{Incoming: packet, Outgoing: nil}
 				captured[conn] = connPackets
 			}
 		} else { // This is the second packet of the connection
 			if !incoming && connPackets.Outgoing == nil {
-				fmt.Println("Second packet seen.")
 				connPackets.Outgoing = packet
 				captured[conn] = connPackets
 
 				if recordable != nil {
-					fmt.Print(".")
+					fmt.Println("-> .")
 					recordable <- connPackets
 				} else {
-					fmt.Println("Second packet seen channel is closed.")
+					fmt.Println("-> Second packet seen channel is closed.")
 				}
 
 			}
@@ -257,7 +265,7 @@ func recordPacket(packet gopacket.Packet, captured map[Connection]protocol.Conne
 }
 
 func saveCaptured(lab protocol.Client, allowBlock *bool, stopCapturing chan bool, recordable chan protocol.ConnectionPackets) {
-	fmt.Println("Saving captured byte sequences... ")
+	//fmt.Println("-> Saving captured byte sequences... ")
 
 	// Use the buffer if we are not in streaming mode
 	buffer := make([]protocol.ConnectionPackets, 0)
@@ -267,9 +275,12 @@ func saveCaptured(lab protocol.Client, allowBlock *bool, stopCapturing chan bool
 		case newAllowBlock := <-stopCapturing:
 			// Save buffered packets and quit
 			for _, packet := range buffer{
-				fmt.Print("*")
+				fmt.Println("-> --<-@")
 				lab.AddTrainPacket(newAllowBlock, packet)
+				time.Sleep(10)
 			}
+
+			fmt.Print("--> We are done saving things to the database. Bye now!\n")
 			os.Exit(1)
 		case connPackets := <-recordable:
 			if allowBlock == nil{

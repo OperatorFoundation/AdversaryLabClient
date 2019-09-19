@@ -49,7 +49,6 @@
       <filePath value="$PROJECT_DIR$/" />
       <package value="github.com/OperatorFoundation/AdversaryLabClient" />
       <directory value="$PROJECT_DIR$/" />
-      <option name="run" value="false" />
       <method v="2" />
     </configuration>
   </component>
