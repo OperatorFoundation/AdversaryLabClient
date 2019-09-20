@@ -63,16 +63,28 @@ Run the command line client without argument to get usage information:
 
     bin/AdversaryLabClient
 
-Train a simulated adversary using captured network traffic:
+**Train a simulated adversary by capturing network traffic that is designated as either allowed or blocked:**
 
-    sudo bin/AdversaryLabClient capture example allow 80
+    sudo bin/AdversaryLabClient 80 allow
 
-This will capture live traffic with a destination port of 80 and add it to the "example" dataset as training for what traffic the adversary should allow.
+This will capture live traffic with a destination port of 80 and add it to the dataset as training for what traffic the adversary should allow.
 
 We will also need to train the simulated adversary using captured network traffic that gives an example of what to block:
 
-    sudo bin/AdversaryLabClient capture example block 443
+    sudo bin/AdversaryLabClient 443 block
 
 This will capture live traffic with a destination port of 443 and add it to the "example" dataset as training for what traffic the adversary should block.
+
+**Alternately you can capture network traffic first and assign the data as either allowed or blocked when you have are done capturing traffic:**
+
+In this scenario you simply leave off the allow/block designation and only provide the port you would like Adversary Lab to listen on. Adversary lab will buffer your traffic until you type in either "allow" or "block". At which point it will stop recording and add it to the dataset based on your input.
+
+For example:
+
+    sudo bin/AdversaryLabClient 443
+
+or
+
+    sudo bin/AdversaryLabClient 80
 
 Once the simulated adversary has both "allow" and "block" traffic, and has observed at least three connections from each type, it can synthesize blocking rules.
