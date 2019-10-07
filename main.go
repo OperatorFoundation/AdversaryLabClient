@@ -46,11 +46,13 @@ func main() {
 	port := os.Args[1]
 
 	if len(os.Args) == 2 {
+		// Buffering Mode
 		// The user has not yet indicated which category this data belongs to.
 		// Buffer the data until the user enters 'allowed' or 'blocked'.
 		go listenForDataCategory(allowBlock, allowBlockChannel)
 		capture(port, allowBlockChannel, nil)
 	} else if len(os.Args) == 3 {
+		// Streaming Mode
 		// The user has indicated how this data should be categorized.
 		// Save the data as we go using the indicated category.
 		if os.Args[2] == "allow" {
@@ -121,7 +123,7 @@ func capture(port string, allowBlockChannel chan bool, allowBlock *bool) {
 			os.Exit(1)
 		}
 	default:
-		handle, pcapErr = pcap.OpenLive("eth0", 1024, false, 30*time.Second)
+		handle, pcapErr = pcap.OpenLive("ens18", 1024, false, 30*time.Second)
 		if pcapErr != nil {
 			fmt.Println("-> Error opening network device:")
 			fmt.Println(pcapErr)
@@ -152,7 +154,7 @@ func capture(port string, allowBlockChannel chan bool, allowBlock *bool) {
 	recordable := make(chan protocol.ConnectionPackets)
 
 	go capturePort(selectedPort, packetChannel, captured, allowBlockChannel, recordable)
-	saveCaptured(lab, allowBlock, allowBlockChannel, recordable)
+	saveCaptured(lab, allowBlock, allowBlockChannel, recordable, captured)
 }
 
 func usage() {
@@ -188,9 +190,6 @@ func capturePort(port layers.TCPPort, packetChannel chan gopacket.Packet, captur
 		case <-stopCapturing:
 			return
 		case packet := <-packetChannel:
-			//			fmt.Print(".")
-			//fmt.Println(packet)
-
 			// Let's see if the packet is TCP
 			tcpLayer := packet.Layer(layers.LayerTypeTCP)
 			var app = packet.ApplicationLayer()
@@ -247,7 +246,8 @@ func recordPacket(packet gopacket.Packet, captured map[Connection]protocol.Conne
 				connPackets = protocol.ConnectionPackets{Incoming: packet, Outgoing: nil}
 				captured[conn] = connPackets
 			}
-		} else { // This is the second packet of the connection
+		} else {
+			// This is the second packet of the connection
 			if !incoming && connPackets.Outgoing == nil {
 				connPackets.Outgoing = packet
 				captured[conn] = connPackets
@@ -258,13 +258,15 @@ func recordPacket(packet gopacket.Packet, captured map[Connection]protocol.Conne
 				} else {
 					fmt.Println("-> Second packet seen channel is closed.")
 				}
-
 			}
 		}
 	}
 }
 
-func saveCaptured(lab protocol.Client, allowBlock *bool, stopCapturing chan bool, recordable chan protocol.ConnectionPackets) {
+// If partial allowed throw it out
+// If partial blocked save it
+// Add
+func saveCaptured(lab protocol.Client, allowBlock *bool, stopCapturing chan bool, recordable chan protocol.ConnectionPackets, captured map[Connection]protocol.ConnectionPackets) {
 	//fmt.Println("-> Saving captured byte sequences... ")
 
 	// Use the buffer if we are not in streaming mode
@@ -273,11 +275,30 @@ func saveCaptured(lab protocol.Client, allowBlock *bool, stopCapturing chan bool
 	for {
 		select {
 		case newAllowBlock := <-stopCapturing:
-			// Save buffered packets and quit
-			for _, packet := range buffer{
+			// Save buffered connections that are complete (have both incoming and potgoing packets) and quit
+			for _, packet := range buffer {
 				fmt.Println("-> --<-@")
 				lab.AddTrainPacket(newAllowBlock, packet)
 				time.Sleep(10)
+			}
+
+			// Usually we want both incoming and outgoing packets
+			// In the case where we know these are blocked connections
+			// We want to record the data even when we have not received a response.
+			// This is still a valid blocked case. We expect that some blocked connections will behave in this way.
+
+			//If the connections in this map are labeled blocked by the user
+			if newAllowBlock == false {
+				for _, connection := range captured {
+
+					// If this connection in the map is incomplete (only the incoming packet was captured) save it
+					// Check this because a complete struct (both incoming and outgoing packets are populated)
+					// will already be getting saved by the above for loop
+					if connection.Outgoing == nil {
+						lab.AddTrainPacket(newAllowBlock, connection)
+					}
+
+				}
 			}
 
 			fmt.Print("--> We are done saving things to the database. Bye now!\n")
