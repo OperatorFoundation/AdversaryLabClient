@@ -65,15 +65,17 @@ func startRedis() redis.Conn {
 
 	return conn
 }
+
 func makeConnectionID() string {
 	currentTime := time.Now()
 	timeNumber := currentTime.UnixNano()
 	connectionID := strconv.Itoa(int(timeNumber))
 	return connectionID
 }
+
 // AddTrainPacket adds a packet to the training data set
 func (client Client) AddTrainPacket(allowBlock bool, conn ConnectionPackets) {
-	// This causes a panic when called from saveCaptured() newAllowBlock case
+	// uuid.NewUUID() caused a panic when called from saveCaptured() newAllowBlock case when threading is incorrect
 	// Caused by random number generator receiving an error
 	//connectionID, uuidError := uuid.NewUUID()
 	//connectionIDString := connectionID.String()
@@ -87,39 +89,51 @@ func (client Client) AddTrainPacket(allowBlock bool, conn ConnectionPackets) {
 
 	connectionIDString := makeConnectionID()
 	incomingPacket := conn.Incoming
-	outgoingPacket := conn.Outgoing
 
 	var incomingPayload []byte
-	var outgoingPayload []byte
-
 	var incomingTime = incomingPacket.Metadata().CaptureInfo.Timestamp.UnixNano() / 1000000
-	var outgoingTime = outgoingPacket.Metadata().CaptureInfo.Timestamp.UnixNano() / 1000000
 
 	if iapp := incomingPacket.ApplicationLayer(); iapp != nil {
 		incomingPayload = iapp.Payload()
 	}
 
-	if oapp := outgoingPacket.ApplicationLayer(); oapp != nil {
-		outgoingPayload = oapp.Payload()
-	}
-
+	// In some cases we will get a conn that only has an incoming packet
+	// This should only ever happen if the conn is blocked
+	// Here we save our incoming packet and connection ID
 	if allowBlock {
 		_, _ = client.conn.Do("hset", allowedIncomingKey, connectionIDString, incomingPayload)
-		_, _ = client.conn.Do("hset", allowedOutgoingKey, connectionIDString, outgoingPayload)
 		_, _ = client.conn.Do("hset", allowedIncomingDatesKey, connectionIDString, incomingTime)
-		_, _ = client.conn.Do("hset", allowedOutgoingDatesKey, connectionIDString, outgoingTime)
 		_, _ = client.conn.Do("rpush", allowedConnectionsKey, connectionIDString)
 		_, _ = client.conn.Do("hincrby", packetStatsKey, allowedPacketsSeenKey, "1")
-		_, _ = client.conn.Do("publish", pubsubChannel, pubsubMessage)
 	} else {
 		_, _ = client.conn.Do("hset", blockedIncomingKey, connectionIDString, incomingPayload)
-		_, _ = client.conn.Do("hset", blockedOutgoingKey, connectionIDString, outgoingPayload)
 		_, _ = client.conn.Do("hset", blockedIncomingDatesKey, connectionIDString, incomingTime)
-		_, _ = client.conn.Do("hset", blockedOutgoingDatesKey, connectionIDString, outgoingTime)
 		_, _ = client.conn.Do("rpush", blockedConnectionsKey, connectionIDString)
 		_, _ = client.conn.Do("hincrby", packetStatsKey, blockedPacketsSeenKey, "1")
-		_, _ = client.conn.Do("publish", pubsubChannel, pubsubMessage)
 	}
+
+	// If  there is an outgoing packet, be sure to save that packet and its timestamp too.
+	if  conn.Outgoing != nil {
+		outgoingPacket := conn.Outgoing
+
+		var outgoingPayload []byte
+		var outgoingTime = outgoingPacket.Metadata().CaptureInfo.Timestamp.UnixNano() / 1000000
+
+		if oapp := outgoingPacket.ApplicationLayer(); oapp != nil {
+			outgoingPayload = oapp.Payload()
+		}
+
+		if allowBlock {
+			_, _ = client.conn.Do("hset", allowedOutgoingKey, connectionIDString, outgoingPayload)
+			_, _ = client.conn.Do("hset", allowedOutgoingDatesKey, connectionIDString, outgoingTime)
+		} else {
+			_, _ = client.conn.Do("hset", blockedOutgoingKey, connectionIDString, outgoingPayload)
+			_, _ = client.conn.Do("hset", blockedOutgoingDatesKey, connectionIDString, outgoingTime)
+		}
+	}
+
+	// Now we can let Adversary Lab know that there is connection data to analyze.
+	_, _ = client.conn.Do("publish", pubsubChannel, pubsubMessage)
 }
 
 // func (client Client) AddTestPacket(dataset string, incoming bool, payload []byte) {
