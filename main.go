@@ -267,7 +267,7 @@ func recordPacket(packet gopacket.Packet, captured map[Connection]protocol.Conne
 // If partial blocked save it
 // Add
 func saveCaptured(lab protocol.Client, allowBlock *bool, stopCapturing chan bool, recordable chan protocol.ConnectionPackets, captured map[Connection]protocol.ConnectionPackets) {
-	//fmt.Println("-> Saving captured byte sequences... ")
+	fmt.Println("-> Saving captured byte sequences... ")
 
 	// Use the buffer if we are not in streaming mode
 	buffer := make([]protocol.ConnectionPackets, 0)
