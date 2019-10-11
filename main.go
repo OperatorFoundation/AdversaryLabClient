@@ -275,7 +275,7 @@ func saveCaptured(lab protocol.Client, allowBlock *bool, stopCapturing chan bool
 	for {
 		select {
 		case newAllowBlock := <-stopCapturing:
-			// Save buffered connections that are complete (have both incoming and potgoing packets) and quit
+			// Save buffered connections that are complete (have both incoming and outgoing packets) and quit
 			for _, packet := range buffer {
 				fmt.Println("-> --<-@")
 				lab.AddTrainPacket(newAllowBlock, packet)
@@ -295,6 +295,7 @@ func saveCaptured(lab protocol.Client, allowBlock *bool, stopCapturing chan bool
 					// Check this because a complete struct (both incoming and outgoing packets are populated)
 					// will already be getting saved by the above for loop
 					if connection.Outgoing == nil {
+						fmt.Println("-> --<-@")
 						lab.AddTrainPacket(newAllowBlock, connection)
 					}
 
