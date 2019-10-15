@@ -277,7 +277,7 @@ func saveCaptured(lab protocol.Client, allowBlock *bool, stopCapturing chan bool
 		case newAllowBlock := <-stopCapturing:
 			// Save buffered connections that are complete (have both incoming and outgoing packets) and quit
 			for _, packet := range buffer {
-				fmt.Println("-> --<-@")
+				fmt.Println("-> Saving complete connections.")
 				lab.AddTrainPacket(newAllowBlock, packet)
 				time.Sleep(10)
 			}
@@ -288,17 +288,18 @@ func saveCaptured(lab protocol.Client, allowBlock *bool, stopCapturing chan bool
 			// This is still a valid blocked case. We expect that some blocked connections will behave in this way.
 
 			//If the connections in this map are labeled blocked by the user
+			println("newAllowBlock is %t", newAllowBlock)
 			if newAllowBlock == false {
+				println("-> Captured count is %d", len(captured))
 				for _, connection := range captured {
-
+					println("Entering loop for saving incomplete connections.")
 					// If this connection in the map is incomplete (only the incoming packet was captured) save it
 					// Check this because a complete struct (both incoming and outgoing packets are populated)
 					// will already be getting saved by the above for loop
 					if connection.Outgoing == nil {
-						fmt.Println("-> --<-@")
+						fmt.Println("-> Saving incomplete connection.")
 						lab.AddTrainPacket(newAllowBlock, connection)
 					}
-
 				}
 			}
 
