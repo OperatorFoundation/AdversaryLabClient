@@ -14,19 +14,34 @@ const (
 	allowedConnectionsKey = "Allowed:Connections"
 	allowedIncomingKey    = "Allowed:Incoming:Packets"
 	allowedOutgoingKey    = "Allowed:Outgoing:Packets"
-
 	allowedIncomingDatesKey = "Allowed:Incoming:Dates"
 	allowedOutgoingDatesKey = "Allowed:Outgoing:Dates"
-
-	allowedPacketsSeenKey = "Allowed:Connections:Seen"
 
 	blockedConnectionsKey = "Blocked:Connections"
 	blockedIncomingKey    = "Blocked:Incoming:Packets"
 	blockedOutgoingKey    = "Blocked:Outgoing:Packets"
-
 	blockedIncomingDatesKey = "Blocked:Incoming:Dates"
 	blockedOutgoingDatesKey = "Blocked:Outgoing:Dates"
 
+	rawPacketStatsKey = "RawPacket:Stats"
+
+	allowedRawConnectionsKey = "Allowed:RawConnections"
+	allowedIncomingNetworkPacketKey = "Allowed:Incoming:Network:Packets"
+	allowedOutgoingNetworkPacketKey = "Allowed:Outgoing:Network:Packets"
+	allowedIncomingTransportPacketKey = "Allowed:Incoming:Transport:Packets"
+	allowedOutgoingTransportPacketKey = "Allowed:Outgoing:Transport:Packets"
+	allowedRawIncomingDatesKey = "Allowed:Incoming:Dates"
+	allowedRawOutgoingDatesKey = "Allowed:Outgoing:Dates"
+
+	blockedRawConnectionsKey = "Blocked:RawConnections"
+	blockedIncomingNetworkPacketKey = "Blocked:Incoming:Network:Packets"
+	blockedOutgoingNetworkPacketKey = "Blocked:Outgoing:Network:Packets"
+	blockedIncomingTransportPacketKey = "Blocked:Incoming:Transport:Packets"
+	blockedOutgoingTransportPacketKey = "Blocked:Outgoing:Transport:Packets"
+	blockedRawIncomingDatesKey = "Blocked:Incoming:Dates"
+	blockedRawOutgoingDatesKey = "Blocked:Outgoing:Dates"
+
+	allowedPacketsSeenKey = "Allowed:Connections:Seen"
 	blockedPacketsSeenKey = "Blocked:Connections:Seen"
 
 	pubsubChannel = "New:Connections:Channel"
@@ -42,6 +57,12 @@ type Client struct {
 type ConnectionPackets struct {
 	Incoming gopacket.Packet
 	Outgoing gopacket.Packet
+}
+
+// RawConnectionPackets holds a slice of incoming packets and a slice of outgoing packet
+type RawConnectionPackets struct {
+	Incoming []gopacket.Packet
+	Outgoing []gopacket.Packet
 }
 
 // Connect connects to the Redis database
@@ -73,19 +94,73 @@ func makeConnectionID() string {
 	return connectionID
 }
 
+
+// AddRawTrainPacket adds a complete raw packet to the training data set.
+// Eventually we will use this in lieu of AddTrainPacket, currently we use both.
+func (client Client) AddRawTrainPacket(allowBlock bool, conn RawConnectionPackets) {
+
+	connectionIDString := makeConnectionID()
+
+	for _, incomingPacket := range conn.Incoming {
+
+		var incomingNetworkLayerContents []byte
+		var incomingTransportLayerContents []byte
+		var incomingTime = incomingPacket.Metadata().CaptureInfo.Timestamp.UnixNano() / 1000000
+
+		if incomingNetworkLayer := incomingPacket.NetworkLayer(); incomingNetworkLayer != nil {
+			incomingNetworkLayerContents = incomingNetworkLayer.LayerContents()
+		}
+
+		if incomingTransportLayer := incomingPacket.TransportLayer(); incomingTransportLayer != nil {
+			incomingTransportLayerContents = incomingTransportLayer.LayerContents()
+		}
+
+		if allowBlock {
+			_, _ = client.conn.Do("hset", allowedIncomingNetworkPacketKey, connectionIDString, incomingNetworkLayerContents)
+			_, _ = client.conn.Do("hset", allowedIncomingTransportPacketKey, connectionIDString, incomingTransportLayerContents)
+			_, _ = client.conn.Do("hset", allowedRawIncomingDatesKey, connectionIDString, incomingTime)
+			_, _ = client.conn.Do("rpush", allowedRawConnectionsKey, connectionIDString)
+			_, _ = client.conn.Do("hincrby", rawPacketStatsKey, allowedPacketsSeenKey, "1")
+		} else {
+			_, _ = client.conn.Do("hset", blockedIncomingNetworkPacketKey, connectionIDString, incomingNetworkLayerContents)
+			_, _ = client.conn.Do("hset", blockedIncomingTransportPacketKey, connectionIDString, incomingTransportLayerContents)
+			_, _ = client.conn.Do("hset", blockedRawIncomingDatesKey, connectionIDString, incomingTime)
+			_, _ = client.conn.Do("rpush", blockedRawConnectionsKey, connectionIDString)
+			_, _ = client.conn.Do("hincrby", rawPacketStatsKey, blockedPacketsSeenKey, "1")
+		}
+	}
+
+	// If  there is an outgoing packet, be sure to save that packet and its timestamp too.
+	for  _, outgoingPacket := range conn.Outgoing {
+		var outgoingNetworkLayerContents []byte
+		var outgoingTransportLayerContents []byte
+		var outgoingTime = outgoingPacket.Metadata().CaptureInfo.Timestamp.UnixNano() / 1000000
+
+		if outgoingNetworkLayer := outgoingPacket.NetworkLayer(); outgoingNetworkLayer != nil {
+			outgoingNetworkLayerContents = outgoingNetworkLayer.LayerContents()
+		}
+
+		if outgoingTransportLayer := outgoingPacket.TransportLayer(); outgoingTransportLayer != nil {
+			outgoingTransportLayerContents = outgoingTransportLayer.LayerContents()
+		}
+
+		if allowBlock {
+			_, _ = client.conn.Do("hset", allowedOutgoingNetworkPacketKey, connectionIDString, outgoingNetworkLayerContents)
+			_, _ = client.conn.Do("hset", allowedOutgoingTransportPacketKey, connectionIDString, outgoingTransportLayerContents)
+			_, _ = client.conn.Do("hset", allowedRawOutgoingDatesKey, connectionIDString, outgoingTime)
+		} else {
+			_, _ = client.conn.Do("hset", blockedOutgoingNetworkPacketKey, connectionIDString, outgoingNetworkLayerContents)
+			_, _ = client.conn.Do("hset", blockedOutgoingTransportPacketKey, connectionIDString, outgoingTransportLayerContents)
+			_, _ = client.conn.Do("hset", blockedRawOutgoingDatesKey, connectionIDString, outgoingTime)
+		}
+	}
+
+	// Now we can let Adversary Lab know that there is connection data to analyze.
+	_, _ = client.conn.Do("publish", pubsubChannel, pubsubMessage)
+}
+
 // AddTrainPacket adds a packet to the training data set
 func (client Client) AddTrainPacket(allowBlock bool, conn ConnectionPackets) {
-	// uuid.NewUUID() caused a panic when called from saveCaptured() newAllowBlock case when threading is incorrect
-	// Caused by random number generator receiving an error
-	//connectionID, uuidError := uuid.NewUUID()
-	//connectionIDString := connectionID.String()
-	//
-	//
-	//if uuidError != nil {
-	//	println("Error generating a UUID exiting AddTrainPacket:")
-	//	println(uuidError)
-	//	return
-	//}
 
 	connectionIDString := makeConnectionID()
 	incomingPacket := conn.Incoming

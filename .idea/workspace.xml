@@ -2,7 +2,9 @@
 <project version="4">
   <component name="ChangeListManager">
     <list default="true" id="15b2c92a-9840-4598-a313-a2f223dd0833" name="Default Changelist" comment="">
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/main.go" beforeDir="false" afterPath="$PROJECT_DIR$/main.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/protocol/client.go" beforeDir="false" afterPath="$PROJECT_DIR$/protocol/client.go" afterDir="false" />
     </list>
     <option name="EXCLUDED_CONVERTED_TO_IGNORED" value="true" />
     <option name="SHOW_DIALOG" value="false" />
@@ -42,7 +44,7 @@
       <module name="AdversaryLabClient" />
       <working_directory value="$PROJECT_DIR$/../../../../" />
       <go_parameters value="-i" />
-      <parameters value="capture example allow 80" />
+      <parameters value="80 allow" />
       <sudo value="true" />
       <kind value="PACKAGE" />
       <filePath value="$PROJECT_DIR$/" />
