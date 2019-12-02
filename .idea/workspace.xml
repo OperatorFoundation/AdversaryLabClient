@@ -3,41 +3,37 @@
   <component name="ChangeListManager">
     <list default="true" id="15b2c92a-9840-4598-a313-a2f223dd0833" name="Default Changelist" comment="">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/main.go" beforeDir="false" afterPath="$PROJECT_DIR$/main.go" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/protocol/client.go" beforeDir="false" afterPath="$PROJECT_DIR$/protocol/client.go" afterDir="false" />
     </list>
-    <option name="EXCLUDED_CONVERTED_TO_IGNORED" value="true" />
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
     <option name="LAST_RESOLUTION" value="IGNORE" />
   </component>
-  <component name="GOROOT" path="/usr/local/go" />
+  <component name="GOROOT" path="/usr/local/Cellar/go/1.12.4/libexec" />
   <component name="Git.Settings">
     <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
   </component>
   <component name="ProjectId" id="1QR6OJC1BiK4HXHPKi9cFLBf9Zy" />
+  <component name="ProjectViewState">
+    <option name="hideEmptyMiddlePackages" value="true" />
+    <option name="showExcludedFiles" value="true" />
+    <option name="showLibraryContents" value="true" />
+  </component>
   <component name="PropertiesComponent">
+    <property name="RunOnceActivity.ShowReadmeOnStart" value="true" />
     <property name="SHARE_PROJECT_CONFIGURATION_FILES" value="true" />
     <property name="WebServerToolWindowFactoryState" value="false" />
+    <property name="configurable.Global.GOPATH.is.expanded" value="true" />
+    <property name="configurable.Module.GOPATH.is.expanded" value="false" />
+    <property name="configurable.Project.GOPATH.is.expanded" value="true" />
     <property name="full.screen.before.presentation.mode" value="false" />
     <property name="go.gopath.indexing.explicitly.defined" value="true" />
     <property name="go.import.settings.migrated" value="true" />
     <property name="go.sdk.automatically.set" value="true" />
+    <property name="go.tried.to.enable.integration.vgo.integrator" value="true" />
     <property name="last_opened_file_path" value="$PROJECT_DIR$" />
-    <property name="settings.editor.selected.configurable" value="editor.preferences.fonts.default" />
-  </component>
-  <component name="RunDashboard">
-    <option name="ruleStates">
-      <list>
-        <RuleState>
-          <option name="name" value="ConfigurationTypeDashboardGroupingRule" />
-        </RuleState>
-        <RuleState>
-          <option name="name" value="StatusDashboardGroupingRule" />
-        </RuleState>
-      </list>
-    </option>
+    <property name="settings.editor.selected.configurable" value="go.vgo" />
   </component>
   <component name="RunManager">
     <configuration name="go build github.com/OperatorFoundation/AdversaryLabClient" type="GoApplicationRunConfiguration" factoryName="Go Application" nameIsGenerated="true">
@@ -52,6 +48,18 @@
       <directory value="$PROJECT_DIR$/" />
       <method v="2" />
     </configuration>
+  </component>
+  <component name="ServiceViewManager">
+    <option name="viewStates">
+      <list>
+        <serviceView>
+          <treeState>
+            <expand />
+            <select />
+          </treeState>
+        </serviceView>
+      </list>
+    </option>
   </component>
   <component name="TypeScriptGeneratedFilesManager">
     <option name="version" value="1" />
@@ -68,5 +76,38 @@
         </entry>
       </map>
     </option>
+  </component>
+  <component name="VgoProject">
+    <integration-enabled>true</integration-enabled>
+  </component>
+  <component name="WindowStateProjectService">
+    <state x="240" y="53" key="#Go_Modules_(vgo)" timestamp="1575257556478">
+      <screen x="0" y="23" width="1280" height="727" />
+    </state>
+    <state x="240" y="53" key="#Go_Modules_(vgo)/0.23.1280.727@0.23.1280.727" timestamp="1575257556478" />
+    <state x="333" y="37" key="#go_build_github.com/OperatorFoundation/AdversaryLabClient" timestamp="1575257706479">
+      <screen x="0" y="23" width="1280" height="727" />
+    </state>
+    <state x="333" y="37" key="#go_build_github.com/OperatorFoundation/AdversaryLabClient/0.23.1280.727@0.23.1280.727" timestamp="1575257706479" />
+    <state width="1218" height="168" key="GridCell.Tab.0.bottom" timestamp="1575257721760">
+      <screen x="0" y="23" width="1280" height="727" />
+    </state>
+    <state width="1218" height="168" key="GridCell.Tab.0.bottom/0.23.1280.727@0.23.1280.727" timestamp="1575257721760" />
+    <state width="1218" height="168" key="GridCell.Tab.0.center" timestamp="1575257721759">
+      <screen x="0" y="23" width="1280" height="727" />
+    </state>
+    <state width="1218" height="168" key="GridCell.Tab.0.center/0.23.1280.727@0.23.1280.727" timestamp="1575257721759" />
+    <state width="1218" height="168" key="GridCell.Tab.0.left" timestamp="1575257721759">
+      <screen x="0" y="23" width="1280" height="727" />
+    </state>
+    <state width="1218" height="168" key="GridCell.Tab.0.left/0.23.1280.727@0.23.1280.727" timestamp="1575257721759" />
+    <state width="1218" height="168" key="GridCell.Tab.0.right" timestamp="1575257721760">
+      <screen x="0" y="23" width="1280" height="727" />
+    </state>
+    <state width="1218" height="168" key="GridCell.Tab.0.right/0.23.1280.727@0.23.1280.727" timestamp="1575257721760" />
+    <state x="141" y="26" key="SettingsEditor" timestamp="1575257685280">
+      <screen x="0" y="23" width="1280" height="727" />
+    </state>
+    <state x="141" y="26" key="SettingsEditor/0.23.1280.727@0.23.1280.727" timestamp="1575257685280" />
   </component>
 </project>

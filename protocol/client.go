@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"github.com/garyburd/redigo/redis"
 	"github.com/google/gopacket"
+	"gopkg.in/rethinkdb/rethinkdb-go.v5"
+	"log"
 	"strconv"
 	"time"
 )
@@ -51,6 +53,7 @@ const (
 // Client holds the connection to the Redis database
 type Client struct {
 	conn redis.Conn
+	session *rethinkdb.Session
 }
 
 // ConnectionPackets holds an incoming packet and an outgoing packet
@@ -68,9 +71,11 @@ type RawConnectionPackets struct {
 // Connect connects to the Redis database
 func Connect() Client {
 	conn := startRedis()
+	session := startRethink()
 
 	return Client{
 		conn: conn,
+		session: session,
 	}
 }
 
@@ -85,6 +90,18 @@ func startRedis() redis.Conn {
 	}
 
 	return conn
+}
+
+func startRethink() *rethinkdb.Session {
+	url := "localhost:28015"
+	session, err := rethinkdb.Connect(rethinkdb.ConnectOpts{
+		Address: url, // endpoint without http
+	})
+	if err != nil {
+		log.Fatalln(err)
+	}
+
+	return session
 }
 
 func makeConnectionID() string {
@@ -210,51 +227,3 @@ func (client Client) AddTrainPacket(allowBlock bool, conn ConnectionPackets) {
 	// Now we can let Adversary Lab know that there is connection data to analyze.
 	_, _ = client.conn.Do("publish", pubsubChannel, pubsubMessage)
 }
-
-// func (client Client) AddTestPacket(dataset string, incoming bool, payload []byte) {
-// 	var packet TestPacket = TestPacket{Dataset: dataset, Incoming: incoming, Payload: payload}
-//
-// 	var value = NamedType{Name: "protocol.TrainPacket", Value: packet}
-//
-// 	var buff = new(bytes.Buffer)
-// 	var bw = bufio.NewWriter(buff)
-// 	//  var b []byte = make([]byte, 0, 2048)
-// 	var h codec.Handle = NamedTypeHandle()
-//
-// 	//  var enc *codec.Encoder = codec.NewEncoderBytes(&b, h)
-// 	var enc *codec.Encoder = codec.NewEncoder(bw, h)
-// 	var err error = enc.Encode(value)
-// 	if err != nil {
-// 		die("Error encoding packet: %s", err.Error())
-// 	}
-//
-// 	bw.Flush()
-//
-// 	client.request(buff.Bytes())
-// }
-
-// func (client Client) GetIncomingRule(dataset string) []byte {
-// 	var request RuleRequest = RuleRequest{Dataset: dataset, Incoming: true}
-// 	var b []byte = make([]byte, 0, 64)
-// 	var h codec.Handle = new(codec.CborHandle)
-// 	var enc *codec.Encoder = codec.NewEncoderBytes(&b, h)
-// 	var err error = enc.Encode(request)
-// 	if err != nil {
-// 		return nil
-// 	}
-//
-// 	return client.request(b)
-// }
-
-// func (client Client) GetOutgoingRule(dataset string) []byte {
-// 	var request RuleRequest = RuleRequest{Dataset: dataset, Incoming: false}
-// 	var b []byte = make([]byte, 0, 64)
-// 	var h codec.Handle = new(codec.CborHandle)
-// 	var enc *codec.Encoder = codec.NewEncoderBytes(&b, h)
-// 	var err error = enc.Encode(request)
-// 	if err != nil {
-// 		return nil
-// 	}
-//
-// 	return client.request(b)
-// }
