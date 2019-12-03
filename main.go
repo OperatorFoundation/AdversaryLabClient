@@ -34,37 +34,38 @@ func (conn Connection) CheckPort(port layers.TCPPort) bool {
 }
 
 func main() {
-	fmt.Println("-> Adversary Lab Client is running...Now with raw support!")
+	fmt.Println("-> Adversary Lab Client is running...Now with RethinkDB support!")
 	var allowBlock bool
 	var allowBlockChannel = make(chan bool)
 
-	if len(os.Args) < 2 {
+	if len(os.Args) < 3 {
 		usage()
 		return
 	}
 
-	port := os.Args[1]
+	transport := os.Args[1]
+	port := os.Args[2]
 
-	if len(os.Args) == 2 {
+	if len(os.Args) == 3 {
 		// Buffering Mode
 		// The user has not yet indicated which category this data belongs to.
 		// Buffer the data until the user enters 'allowed' or 'blocked'.
 		go listenForDataCategory(allowBlockChannel)
-		capture(port, allowBlockChannel, nil)
-	} else if len(os.Args) == 3 {
+		capture(transport, port, allowBlockChannel, nil)
+	} else if len(os.Args) == 4 {
 		// Streaming Mode
 		// The user has indicated how this data should be categorized.
 		// Save the data as we go using the indicated category.
-		if os.Args[2] == "allow" {
+		if os.Args[3] == "allow" {
 			allowBlock = true
-		} else if os.Args[2] == "block" {
+		} else if os.Args[3] == "block" {
 			allowBlock = false
 		} else {
 			usage()
 			return
 		}
 
-		capture(port, allowBlockChannel, &allowBlock)
+		capture(transport, port, allowBlockChannel, &allowBlock)
 	} else {
 		usage()
 		return
@@ -126,7 +127,7 @@ func listenForEnter(allowBlockChannel chan bool) {
 	allowBlockChannel<-allowBlock
 }
 
-func capture(port string, allowBlockChannel chan bool, allowBlock *bool) {
+func capture(transport string, port string, allowBlockChannel chan bool, allowBlock *bool) {
 	var err error
 	var input string
 
@@ -189,15 +190,15 @@ func capture(port string, allowBlockChannel chan bool, allowBlock *bool) {
 	recordable := make(chan protocol.ConnectionPackets)
 
 	go capturePort(selectedPort, packetChannel, captured, rawCaptured, allowBlockChannel, recordable)
-	saveCaptured(*lab, allowBlock, allowBlockChannel, recordable, captured, rawCaptured)
+	saveCaptured(*lab, transport, allowBlock, allowBlockChannel, recordable, captured, rawCaptured)
 }
 
 func usage() {
-	fmt.Println("-> AdversaryLabClient <port> [protocol]")
-	fmt.Println("-> Example: AdversaryLabClient 80 allow")
-	fmt.Println("-> Example: AdversaryLabClient 443 block")
-	fmt.Println("-> Example: AdversaryLabClient 80")
-	fmt.Println("-> Example: AdversaryLabClient 443")
+	fmt.Println("-> AdversaryLabClient <transport> <port> [protocol]")
+	fmt.Println("-> Example: AdversaryLabClient HTTP 80 allow")
+	fmt.Println("-> Example: AdversaryLabClient HTTPS 443 block")
+	fmt.Println("-> Example: AdversaryLabClient HTTP 80")
+	fmt.Println("-> Example: AdversaryLabClient HTTPS 443")
 	fmt.Println()
 	os.Exit(1)
 }
@@ -331,7 +332,7 @@ func recordPacket(packet gopacket.Packet, captured map[Connection]protocol.Conne
 // If partial allowed throw it out
 // If partial blocked save it
 // Add
-func saveCaptured(lab protocol.Client, allowBlock *bool, stopCapturing chan bool, recordable chan protocol.ConnectionPackets, captured map[Connection]protocol.ConnectionPackets, rawCaptured map[Connection]protocol.RawConnectionPackets) {
+func saveCaptured(lab protocol.Client, transport string, allowBlock *bool, stopCapturing chan bool, recordable chan protocol.ConnectionPackets, captured map[Connection]protocol.ConnectionPackets, rawCaptured map[Connection]protocol.RawConnectionPackets) {
 	fmt.Println("-> Saving captured raw connection packets... ")
 
 	// Use the buffer if we are not in streaming mode
@@ -343,13 +344,13 @@ func saveCaptured(lab protocol.Client, allowBlock *bool, stopCapturing chan bool
 			// Save buffered connections that are complete (have both incoming and outgoing packets) and quit
 			for _, packet := range buffer {
 				println("-> Saving complete connections. --<-@")
-				lab.AddTrainPacket(newAllowBlock, packet)
+				lab.AddTrainPacket(transport, newAllowBlock, packet)
 				time.Sleep(8)
 			}
 
 			for _, rawConnection := range rawCaptured {
 				println("-> Saving complete raw connections. --<-@")
-				lab.AddRawTrainPacket(newAllowBlock, rawConnection)
+				lab.AddRawTrainPacket(transport, newAllowBlock, rawConnection)
 				time.Sleep(8)
 			}
 
@@ -369,7 +370,7 @@ func saveCaptured(lab protocol.Client, allowBlock *bool, stopCapturing chan bool
 					// will already be getting saved by the above for loop
 					if connection.Outgoing == nil {
 						fmt.Println("-> Saving incomplete connection.  --<-@")
-						lab.AddTrainPacket(newAllowBlock, connection)
+						lab.AddTrainPacket(transport, newAllowBlock, connection)
 					}
 				}
 			}
@@ -381,7 +382,7 @@ func saveCaptured(lab protocol.Client, allowBlock *bool, stopCapturing chan bool
 				buffer = append(buffer, connPackets)
 			} else {
 				fmt.Print("*")
-				lab.AddTrainPacket(*allowBlock, connPackets)
+				lab.AddTrainPacket(transport, *allowBlock, connPackets)
 			}
 		}
 	}

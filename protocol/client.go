@@ -20,6 +20,7 @@ type RawPacket struct {
 	Timestamp int64 `gorethink:"timestamp"`
 	AllowBlock bool `gorethink:"allow_block"`
 	InOut bool `gorethink:"in_out"`
+	Handshake bool `gorethink:"handshake"`
 }
 
 // Client holds the connection to the Redis database
@@ -63,11 +64,6 @@ func startRethink() (*rethinkdb.Session, error) {
 		return nil, err
 	}
 
-	_, createErr := rethinkdb.DBCreate("AdversaryLab").RunWrite(session)
-	if createErr != nil {
-		fmt.Println("Could not create database", createErr)
-	}
-
 	return session, nil
 }
 
@@ -81,12 +77,17 @@ func makeConnectionID() string {
 
 // AddRawTrainPacket adds a complete raw packet to the training data set.
 // Eventually we will use this in lieu of AddTrainPacket, currently we use both.
-func (client Client) AddRawTrainPacket(allowBlock bool, conn RawConnectionPackets) {
+func (client Client) AddRawTrainPacket(transport string, allowBlock bool, conn RawConnectionPackets) {
 	connectionIDString := makeConnectionID()
 
-	_, tableCreateErr := rethinkdb.DB("AdversaryLab").TableCreate(packetsKey).RunWrite(client.session)
-	if tableCreateErr != nil {
-		fmt.Println("Could not create table", tableCreateErr)
+	_, createErr := rethinkdb.DBCreate(transport).RunWrite(client.session)
+	if createErr == nil {
+		fmt.Println("Created database", transport)
+	}
+
+	_, tableCreateErr := rethinkdb.DB(transport).TableCreate(packetsKey).RunWrite(client.session)
+	if tableCreateErr == nil {
+		fmt.Println("Created table", transport, packetsKey)
 	}
 
 	for _, incomingPacket := range conn.Incoming {
@@ -121,9 +122,10 @@ func (client Client) AddRawTrainPacket(allowBlock bool, conn RawConnectionPacket
 			Timestamp:  incomingTime,
 			AllowBlock: allowBlock,
 			InOut: true,
+			Handshake: false,
 		}
 
-		rethinkdb.DB("AdversaryLab").Table(packetsKey).Insert(connValue).RunWrite(client.session)
+		rethinkdb.DB(transport).Table(packetsKey).Insert(connValue).RunWrite(client.session)
 	}
 
 	// If  there is an outgoing packet, be sure to save that packet and its timestamp too.
@@ -157,14 +159,15 @@ func (client Client) AddRawTrainPacket(allowBlock bool, conn RawConnectionPacket
 			Timestamp:  outgoingTime,
 			AllowBlock: allowBlock,
 			InOut: false,
+			Handshake: false,
 		}
 
-		rethinkdb.DB("AdversaryLab").Table(packetsKey).Insert(connValue).RunWrite(client.session)
+		rethinkdb.DB(transport).Table(packetsKey).Insert(connValue).RunWrite(client.session)
 	}
 }
 
 // AddTrainPacket adds a packet to the training data set
-func (client Client) AddTrainPacket(allowBlock bool, conn ConnectionPackets) {
+func (client Client) AddTrainPacket(transport string, allowBlock bool, conn ConnectionPackets) {
 	var connValue RawPacket
 
 	connectionIDString := makeConnectionID()
@@ -190,9 +193,14 @@ func (client Client) AddTrainPacket(allowBlock bool, conn ConnectionPackets) {
 		incomingPayload = iapp.Payload()
 	}
 
-	_, tableCreateErr := rethinkdb.DB("AdversaryLab").TableCreate(packetsKey).RunWrite(client.session)
-	if tableCreateErr != nil {
-		fmt.Println("Could not create table", tableCreateErr)
+	_, createErr := rethinkdb.DBCreate(transport).RunWrite(client.session)
+	if createErr == nil {
+		fmt.Println("Created database", transport)
+	}
+
+	_, tableCreateErr := rethinkdb.DB(transport).TableCreate(packetsKey).RunWrite(client.session)
+	if tableCreateErr == nil {
+		fmt.Println("Created table", transport, packetsKey)
 	}
 
 	connValue = RawPacket{
@@ -203,9 +211,10 @@ func (client Client) AddTrainPacket(allowBlock bool, conn ConnectionPackets) {
 		Timestamp:  incomingTime,
 		AllowBlock: allowBlock,
 		InOut:      true,
+		Handshake: true,
 	}
 
-	rethinkdb.DB("AdversaryLab").Table(packetsKey).Insert(connValue).RunWrite(client.session)
+	rethinkdb.DB(transport).Table(packetsKey).Insert(connValue).RunWrite(client.session)
 
 	// In some cases we will get a conn that only has an incoming packet
 	// This should only ever happen if the conn is blocked
@@ -241,8 +250,9 @@ func (client Client) AddTrainPacket(allowBlock bool, conn ConnectionPackets) {
 			Timestamp:  outgoingTime,
 			AllowBlock: allowBlock,
 			InOut:      false,
+			Handshake: true,
 		}
 
-		rethinkdb.DB("AdversaryLab").Table(packetsKey).Insert(connValue).RunWrite(client.session)
+		rethinkdb.DB(transport).Table(packetsKey).Insert(connValue).RunWrite(client.session)
 	}
 }
