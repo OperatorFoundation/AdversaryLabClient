@@ -127,13 +127,18 @@ func listenForEnter(allowBlockChannel chan bool) {
 }
 
 func capture(port string, allowBlockChannel chan bool, allowBlock *bool) {
-	var lab protocol.Client
 	var err error
 	var input string
 
 	fmt.Println("-> Launching server...")
 
-	lab = protocol.Connect()
+	lab, connectErr := protocol.Connect()
+	if connectErr != nil {
+		fmt.Println("Connect error!", connectErr)
+		return
+	}
+
+	fmt.Println("Connected.")
 
 	captured := map[Connection]protocol.ConnectionPackets{}
 	rawCaptured := map[Connection]protocol.RawConnectionPackets{}
@@ -184,7 +189,7 @@ func capture(port string, allowBlockChannel chan bool, allowBlock *bool) {
 	recordable := make(chan protocol.ConnectionPackets)
 
 	go capturePort(selectedPort, packetChannel, captured, rawCaptured, allowBlockChannel, recordable)
-	saveCaptured(lab, allowBlock, allowBlockChannel, recordable, captured, rawCaptured)
+	saveCaptured(*lab, allowBlock, allowBlockChannel, recordable, captured, rawCaptured)
 }
 
 func usage() {
