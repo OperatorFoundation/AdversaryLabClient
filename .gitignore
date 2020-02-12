@@ -57,3 +57,5 @@ Temporary Items
 .apdisk
 
 # End of https://www.gitignore.io/api/go,macos
+.idea/workspace.xml
+.idea/workspace.xml

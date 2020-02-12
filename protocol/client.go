@@ -2,55 +2,30 @@ package protocol
 
 import (
 	"fmt"
-	"github.com/garyburd/redigo/redis"
 	"github.com/google/gopacket"
+	"gopkg.in/rethinkdb/rethinkdb-go.v5"
 	"strconv"
 	"time"
 )
 
 const (
-	packetStatsKey = "Packet:Stats"
-
-	allowedConnectionsKey = "Allowed:Connections"
-	allowedIncomingKey    = "Allowed:Incoming:Packets"
-	allowedOutgoingKey    = "Allowed:Outgoing:Packets"
-	allowedIncomingDatesKey = "Allowed:Incoming:Dates"
-	allowedOutgoingDatesKey = "Allowed:Outgoing:Dates"
-
-	blockedConnectionsKey = "Blocked:Connections"
-	blockedIncomingKey    = "Blocked:Incoming:Packets"
-	blockedOutgoingKey    = "Blocked:Outgoing:Packets"
-	blockedIncomingDatesKey = "Blocked:Incoming:Dates"
-	blockedOutgoingDatesKey = "Blocked:Outgoing:Dates"
-
-	rawPacketStatsKey = "RawPacket:Stats"
-
-	allowedRawConnectionsKey = "Allowed:RawConnections"
-	allowedIncomingNetworkPacketKey = "Allowed:Incoming:Network:Packets"
-	allowedOutgoingNetworkPacketKey = "Allowed:Outgoing:Network:Packets"
-	allowedIncomingTransportPacketKey = "Allowed:Incoming:Transport:Packets"
-	allowedOutgoingTransportPacketKey = "Allowed:Outgoing:Transport:Packets"
-	allowedRawIncomingDatesKey = "Allowed:Incoming:Dates"
-	allowedRawOutgoingDatesKey = "Allowed:Outgoing:Dates"
-
-	blockedRawConnectionsKey = "Blocked:RawConnections"
-	blockedIncomingNetworkPacketKey = "Blocked:Incoming:Network:Packets"
-	blockedOutgoingNetworkPacketKey = "Blocked:Outgoing:Network:Packets"
-	blockedIncomingTransportPacketKey = "Blocked:Incoming:Transport:Packets"
-	blockedOutgoingTransportPacketKey = "Blocked:Outgoing:Transport:Packets"
-	blockedRawIncomingDatesKey = "Blocked:Incoming:Dates"
-	blockedRawOutgoingDatesKey = "Blocked:Outgoing:Dates"
-
-	allowedPacketsSeenKey = "Allowed:Connections:Seen"
-	blockedPacketsSeenKey = "Blocked:Connections:Seen"
-
-	pubsubChannel = "New:Connections:Channel"
-	pubsubMessage = "NewConnectionAdded"
+	packetsKey = "Packets"
 )
+
+type RawPacket struct {
+	Connection    string `gorethink:"connection"`
+	IPPacket  []byte `gorethink:"ip_packet"`
+	TCPPacket  []byte `gorethink:"tcp_packet"`
+	Payload []byte `gorethink:"payload"`
+	Timestamp int64 `gorethink:"timestamp"`
+	AllowBlock bool `gorethink:"allow_block"`
+	InOut bool `gorethink:"in_out"`
+	Handshake bool `gorethink:"handshake"`
+}
 
 // Client holds the connection to the Redis database
 type Client struct {
-	conn redis.Conn
+	session *rethinkdb.Session
 }
 
 // ConnectionPackets holds an incoming packet and an outgoing packet
@@ -66,25 +41,30 @@ type RawConnectionPackets struct {
 }
 
 // Connect connects to the Redis database
-func Connect() Client {
-	conn := startRedis()
-
-	return Client{
-		conn: conn,
+func Connect() (*Client, error) {
+	session, sessionErr := startRethink()
+	if sessionErr != nil {
+		return nil, sessionErr
 	}
+
+	fmt.Println("Rethink session!")
+
+	return &Client{
+		session: session,
+	}, nil
 }
 
-func startRedis() redis.Conn {
-	conn, _ := redis.Dial("tcp", "localhost:6380")
-
-	reply, err := conn.Do("ping")
-	if err == nil {
-		fmt.Println("-> Successful ping to Redis server: ", reply)
-	} else {
-		fmt.Println("-> Redis error: ", err)
+func startRethink() (*rethinkdb.Session, error) {
+	fmt.Println("init rethink")
+	url := "localhost:28015"
+	session, err := rethinkdb.Connect(rethinkdb.ConnectOpts{
+		Address: url, // endpoint without http
+	})
+	if err != nil {
+		return nil, err
 	}
 
-	return conn
+	return session, nil
 }
 
 func makeConnectionID() string {
@@ -97,15 +77,30 @@ func makeConnectionID() string {
 
 // AddRawTrainPacket adds a complete raw packet to the training data set.
 // Eventually we will use this in lieu of AddTrainPacket, currently we use both.
-func (client Client) AddRawTrainPacket(allowBlock bool, conn RawConnectionPackets) {
-
+func (client Client) AddRawTrainPacket(transport string, allowBlock bool, conn RawConnectionPackets) {
 	connectionIDString := makeConnectionID()
+
+	_, createErr := rethinkdb.DBCreate(transport).RunWrite(client.session)
+	if createErr == nil {
+		fmt.Println("Created database", transport)
+	}
+
+	_, tableCreateErr := rethinkdb.DB(transport).TableCreate(packetsKey).RunWrite(client.session)
+	if tableCreateErr == nil {
+		fmt.Println("Created table", transport, packetsKey)
+	}
 
 	for _, incomingPacket := range conn.Incoming {
 
 		var incomingNetworkLayerContents []byte
 		var incomingTransportLayerContents []byte
+		var incomingPayload []byte
 		var incomingTime = incomingPacket.Metadata().CaptureInfo.Timestamp.UnixNano() / 1000000
+
+		fmt.Println(connectionIDString)
+		fmt.Print(incomingNetworkLayerContents)
+		fmt.Println(incomingTransportLayerContents)
+		fmt.Println(incomingTime)
 
 		if incomingNetworkLayer := incomingPacket.NetworkLayer(); incomingNetworkLayer != nil {
 			incomingNetworkLayerContents = incomingNetworkLayer.LayerContents()
@@ -115,26 +110,34 @@ func (client Client) AddRawTrainPacket(allowBlock bool, conn RawConnectionPacket
 			incomingTransportLayerContents = incomingTransportLayer.LayerContents()
 		}
 
-		if allowBlock {
-			_, _ = client.conn.Do("hset", allowedIncomingNetworkPacketKey, connectionIDString, incomingNetworkLayerContents)
-			_, _ = client.conn.Do("hset", allowedIncomingTransportPacketKey, connectionIDString, incomingTransportLayerContents)
-			_, _ = client.conn.Do("hset", allowedRawIncomingDatesKey, connectionIDString, incomingTime)
-			_, _ = client.conn.Do("rpush", allowedRawConnectionsKey, connectionIDString)
-			_, _ = client.conn.Do("hincrby", rawPacketStatsKey, allowedPacketsSeenKey, "1")
-		} else {
-			_, _ = client.conn.Do("hset", blockedIncomingNetworkPacketKey, connectionIDString, incomingNetworkLayerContents)
-			_, _ = client.conn.Do("hset", blockedIncomingTransportPacketKey, connectionIDString, incomingTransportLayerContents)
-			_, _ = client.conn.Do("hset", blockedRawIncomingDatesKey, connectionIDString, incomingTime)
-			_, _ = client.conn.Do("rpush", blockedRawConnectionsKey, connectionIDString)
-			_, _ = client.conn.Do("hincrby", rawPacketStatsKey, blockedPacketsSeenKey, "1")
+		if iapp := incomingPacket.ApplicationLayer(); iapp != nil {
+			incomingPayload = iapp.Payload()
 		}
+
+		connValue := RawPacket{
+			Connection: connectionIDString,
+			IPPacket:   incomingNetworkLayerContents,
+			TCPPacket:  incomingTransportLayerContents,
+			Payload: incomingPayload,
+			Timestamp:  incomingTime,
+			AllowBlock: allowBlock,
+			InOut: true,
+			Handshake: false,
+		}
+
+		rethinkdb.DB(transport).Table(packetsKey).Insert(connValue).RunWrite(client.session)
 	}
 
 	// If  there is an outgoing packet, be sure to save that packet and its timestamp too.
 	for  _, outgoingPacket := range conn.Outgoing {
 		var outgoingNetworkLayerContents []byte
 		var outgoingTransportLayerContents []byte
+		var outgoingPayload []byte
 		var outgoingTime = outgoingPacket.Metadata().CaptureInfo.Timestamp.UnixNano() / 1000000
+
+		fmt.Println(outgoingNetworkLayerContents)
+		fmt.Println(outgoingTransportLayerContents)
+		fmt.Println(outgoingTime)
 
 		if outgoingNetworkLayer := outgoingPacket.NetworkLayer(); outgoingNetworkLayer != nil {
 			outgoingNetworkLayerContents = outgoingNetworkLayer.LayerContents()
@@ -144,117 +147,112 @@ func (client Client) AddRawTrainPacket(allowBlock bool, conn RawConnectionPacket
 			outgoingTransportLayerContents = outgoingTransportLayer.LayerContents()
 		}
 
-		if allowBlock {
-			_, _ = client.conn.Do("hset", allowedOutgoingNetworkPacketKey, connectionIDString, outgoingNetworkLayerContents)
-			_, _ = client.conn.Do("hset", allowedOutgoingTransportPacketKey, connectionIDString, outgoingTransportLayerContents)
-			_, _ = client.conn.Do("hset", allowedRawOutgoingDatesKey, connectionIDString, outgoingTime)
-		} else {
-			_, _ = client.conn.Do("hset", blockedOutgoingNetworkPacketKey, connectionIDString, outgoingNetworkLayerContents)
-			_, _ = client.conn.Do("hset", blockedOutgoingTransportPacketKey, connectionIDString, outgoingTransportLayerContents)
-			_, _ = client.conn.Do("hset", blockedRawOutgoingDatesKey, connectionIDString, outgoingTime)
+		if oapp := outgoingPacket.ApplicationLayer(); oapp != nil {
+			outgoingPayload = oapp.Payload()
 		}
-	}
 
-	// Now we can let Adversary Lab know that there is connection data to analyze.
-	_, _ = client.conn.Do("publish", pubsubChannel, pubsubMessage)
+		connValue := RawPacket{
+			Connection: connectionIDString,
+			IPPacket:   outgoingNetworkLayerContents,
+			TCPPacket:  outgoingTransportLayerContents,
+			Payload: outgoingPayload,
+			Timestamp:  outgoingTime,
+			AllowBlock: allowBlock,
+			InOut: false,
+			Handshake: false,
+		}
+
+		rethinkdb.DB(transport).Table(packetsKey).Insert(connValue).RunWrite(client.session)
+	}
 }
 
 // AddTrainPacket adds a packet to the training data set
-func (client Client) AddTrainPacket(allowBlock bool, conn ConnectionPackets) {
+func (client Client) AddTrainPacket(transport string, allowBlock bool, conn ConnectionPackets) {
+	var connValue RawPacket
 
 	connectionIDString := makeConnectionID()
 	incomingPacket := conn.Incoming
 
+	var incomingNetworkLayerContents []byte
+	var incomingTransportLayerContents []byte
 	var incomingPayload []byte
 	var incomingTime = incomingPacket.Metadata().CaptureInfo.Timestamp.UnixNano() / 1000000
+
+	fmt.Println(incomingPayload)
+	fmt.Println(incomingTime)
+
+	if incomingNetworkLayer := incomingPacket.NetworkLayer(); incomingNetworkLayer != nil {
+		incomingNetworkLayerContents = incomingNetworkLayer.LayerContents()
+	}
+
+	if incomingTransportLayer := incomingPacket.TransportLayer(); incomingTransportLayer != nil {
+		incomingTransportLayerContents = incomingTransportLayer.LayerContents()
+	}
 
 	if iapp := incomingPacket.ApplicationLayer(); iapp != nil {
 		incomingPayload = iapp.Payload()
 	}
 
+	_, createErr := rethinkdb.DBCreate(transport).RunWrite(client.session)
+	if createErr == nil {
+		fmt.Println("Created database", transport)
+	}
+
+	_, tableCreateErr := rethinkdb.DB(transport).TableCreate(packetsKey).RunWrite(client.session)
+	if tableCreateErr == nil {
+		fmt.Println("Created table", transport, packetsKey)
+	}
+
+	connValue = RawPacket{
+		Connection: connectionIDString,
+		IPPacket:   incomingNetworkLayerContents,
+		TCPPacket:  incomingTransportLayerContents,
+		Payload:    incomingPayload,
+		Timestamp:  incomingTime,
+		AllowBlock: allowBlock,
+		InOut:      true,
+		Handshake: true,
+	}
+
+	rethinkdb.DB(transport).Table(packetsKey).Insert(connValue).RunWrite(client.session)
+
 	// In some cases we will get a conn that only has an incoming packet
 	// This should only ever happen if the conn is blocked
 	// Here we save our incoming packet and connection ID
-	if allowBlock {
-		_, _ = client.conn.Do("hset", allowedIncomingKey, connectionIDString, incomingPayload)
-		_, _ = client.conn.Do("hset", allowedIncomingDatesKey, connectionIDString, incomingTime)
-		_, _ = client.conn.Do("rpush", allowedConnectionsKey, connectionIDString)
-		_, _ = client.conn.Do("hincrby", packetStatsKey, allowedPacketsSeenKey, "1")
-	} else {
-		_, _ = client.conn.Do("hset", blockedIncomingKey, connectionIDString, incomingPayload)
-		_, _ = client.conn.Do("hset", blockedIncomingDatesKey, connectionIDString, incomingTime)
-		_, _ = client.conn.Do("rpush", blockedConnectionsKey, connectionIDString)
-		_, _ = client.conn.Do("hincrby", packetStatsKey, blockedPacketsSeenKey, "1")
-	}
-
-	// If  there is an outgoing packet, be sure to save that packet and its timestamp too.
 	if  conn.Outgoing != nil {
 		outgoingPacket := conn.Outgoing
 
+		var outgoingNetworkLayerContents []byte
+		var outgoingTransportLayerContents []byte
 		var outgoingPayload []byte
 		var outgoingTime = outgoingPacket.Metadata().CaptureInfo.Timestamp.UnixNano() / 1000000
+
+		fmt.Println(outgoingPayload)
+		fmt.Println(outgoingTime)
+
+		if outgoingNetworkLayer := outgoingPacket.NetworkLayer(); outgoingNetworkLayer != nil {
+			outgoingNetworkLayerContents = outgoingNetworkLayer.LayerContents()
+		}
+
+		if outgoingTransportLayer := outgoingPacket.TransportLayer(); outgoingTransportLayer != nil {
+			outgoingTransportLayerContents = outgoingTransportLayer.LayerContents()
+		}
 
 		if oapp := outgoingPacket.ApplicationLayer(); oapp != nil {
 			outgoingPayload = oapp.Payload()
 		}
 
-		if allowBlock {
-			_, _ = client.conn.Do("hset", allowedOutgoingKey, connectionIDString, outgoingPayload)
-			_, _ = client.conn.Do("hset", allowedOutgoingDatesKey, connectionIDString, outgoingTime)
-		} else {
-			_, _ = client.conn.Do("hset", blockedOutgoingKey, connectionIDString, outgoingPayload)
-			_, _ = client.conn.Do("hset", blockedOutgoingDatesKey, connectionIDString, outgoingTime)
+		connValue = RawPacket{
+			Connection: connectionIDString,
+			IPPacket:   outgoingNetworkLayerContents,
+			TCPPacket:  outgoingTransportLayerContents,
+			Payload:    outgoingPayload,
+			Timestamp:  outgoingTime,
+			AllowBlock: allowBlock,
+			InOut:      false,
+			Handshake: true,
 		}
+
+		rethinkdb.DB(transport).Table(packetsKey).Insert(connValue).RunWrite(client.session)
 	}
-
-	// Now we can let Adversary Lab know that there is connection data to analyze.
-	_, _ = client.conn.Do("publish", pubsubChannel, pubsubMessage)
 }
-
-// func (client Client) AddTestPacket(dataset string, incoming bool, payload []byte) {
-// 	var packet TestPacket = TestPacket{Dataset: dataset, Incoming: incoming, Payload: payload}
-//
-// 	var value = NamedType{Name: "protocol.TrainPacket", Value: packet}
-//
-// 	var buff = new(bytes.Buffer)
-// 	var bw = bufio.NewWriter(buff)
-// 	//  var b []byte = make([]byte, 0, 2048)
-// 	var h codec.Handle = NamedTypeHandle()
-//
-// 	//  var enc *codec.Encoder = codec.NewEncoderBytes(&b, h)
-// 	var enc *codec.Encoder = codec.NewEncoder(bw, h)
-// 	var err error = enc.Encode(value)
-// 	if err != nil {
-// 		die("Error encoding packet: %s", err.Error())
-// 	}
-//
-// 	bw.Flush()
-//
-// 	client.request(buff.Bytes())
-// }
-
-// func (client Client) GetIncomingRule(dataset string) []byte {
-// 	var request RuleRequest = RuleRequest{Dataset: dataset, Incoming: true}
-// 	var b []byte = make([]byte, 0, 64)
-// 	var h codec.Handle = new(codec.CborHandle)
-// 	var enc *codec.Encoder = codec.NewEncoderBytes(&b, h)
-// 	var err error = enc.Encode(request)
-// 	if err != nil {
-// 		return nil
-// 	}
-//
-// 	return client.request(b)
-// }
-
-// func (client Client) GetOutgoingRule(dataset string) []byte {
-// 	var request RuleRequest = RuleRequest{Dataset: dataset, Incoming: false}
-// 	var b []byte = make([]byte, 0, 64)
-// 	var h codec.Handle = new(codec.CborHandle)
-// 	var enc *codec.Encoder = codec.NewEncoderBytes(&b, h)
-// 	var err error = enc.Encode(request)
-// 	if err != nil {
-// 		return nil
-// 	}
-//
-// 	return client.request(b)
-// }
