@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"os"
+	"os/signal"
 	"runtime"
 	"strconv"
 	"strings"
@@ -37,6 +38,9 @@ func main() {
 	fmt.Println("-> Adversary Lab Client is running...Now with RethinkDB support!")
 	var allowBlock bool
 	var allowBlockChannel = make(chan bool)
+	var signalChannel = make(chan os.Signal, 1)
+	signal.Notify(signalChannel, os.Interrupt)
+	go handleSignals(allowBlockChannel, signalChannel)
 
 	if len(os.Args) < 3 {
 		usage()
@@ -72,14 +76,27 @@ func main() {
 	}
 }
 
+func handleSignals (allowBlockChannel chan bool, signalChannel chan os.Signal) {
+	// Wait until we get the interrupt signal(ctrl + c) from the user
+	_ = <-signalChannel
+	// Set allow block to false so that the program exits gracefully
+	allowBlockChannel <- false
+}
+
 func listenForDataCategory(allowBlockChannel chan bool) {
 	var allowBlockWasSet = false
 	allowBlock := false
+	reader := bufio.NewReader(os.Stdin)
 
 	for allowBlockWasSet == false {
 		fmt.Print("-> Type 'allow' or 'block' when you are done recording <-\n")
-		reader := bufio.NewReader(os.Stdin)
-		text, _ := reader.ReadString('\n')
+		text, readErr := reader.ReadString('\n')
+		if readErr != nil {
+			allowBlock = false
+			allowBlockWasSet = true
+			break
+		}
+
 		text = strings.Replace(text, "\n", "", -1)
 		if text == "allow" {
 			fmt.Println("-> This packet data will be saved as allowed.")
@@ -98,7 +115,6 @@ func listenForDataCategory(allowBlockChannel chan bool) {
 	// are either allowed or blocked based on user input.
 	allowBlockChannel<-allowBlock
 }
-
 
 func listenForEnter(allowBlockChannel chan bool) {
 	var allowBlockWasSet = false
@@ -215,10 +231,6 @@ func capturePort(port layers.TCPPort, packetChannel chan gopacket.Packet, captur
 	fmt.Println("-> Capturing port", port)
 
 	var count = uint16(len(captured))
-
-	// for _, packet := range captured {
-	// 	recordable <- packet
-	// }
 
 	for {
 		select {
@@ -386,5 +398,6 @@ func saveCaptured(lab protocol.Client, transport string, allowBlock *bool, stopC
 			}
 		}
 	}
-
 }
+
+
