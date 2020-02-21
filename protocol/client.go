@@ -47,7 +47,7 @@ func Connect() (*Client, error) {
 		return nil, sessionErr
 	}
 
-	fmt.Println("Rethink session!")
+	fmt.Println("-> Rethink session!")
 
 	return &Client{
 		session: session,
@@ -55,7 +55,7 @@ func Connect() (*Client, error) {
 }
 
 func startRethink() (*rethinkdb.Session, error) {
-	fmt.Println("init rethink")
+	fmt.Println("-> init rethink")
 	url := "localhost:28015"
 	session, err := rethinkdb.Connect(rethinkdb.ConnectOpts{
 		Address: url, // endpoint without http
@@ -82,12 +82,12 @@ func (client Client) AddRawTrainPacket(transport string, allowBlock bool, conn R
 
 	_, createErr := rethinkdb.DBCreate(transport).RunWrite(client.session)
 	if createErr == nil {
-		fmt.Println("Created database", transport)
+		fmt.Println("-> Created database", transport)
 	}
 
 	_, tableCreateErr := rethinkdb.DB(transport).TableCreate(packetsKey).RunWrite(client.session)
 	if tableCreateErr == nil {
-		fmt.Println("Created table", transport, packetsKey)
+		fmt.Println("-> Created table", transport, packetsKey)
 	}
 
 	for _, incomingPacket := range conn.Incoming {
@@ -97,10 +97,10 @@ func (client Client) AddRawTrainPacket(transport string, allowBlock bool, conn R
 		var incomingPayload []byte
 		var incomingTime = incomingPacket.Metadata().CaptureInfo.Timestamp.UnixNano() / 1000000
 
-		fmt.Println(connectionIDString)
-		fmt.Print(incomingNetworkLayerContents)
-		fmt.Println(incomingTransportLayerContents)
-		fmt.Println(incomingTime)
+		//fmt.Println(connectionIDString)
+		//fmt.Print(incomingNetworkLayerContents)
+		//fmt.Println(incomingTransportLayerContents)
+		//fmt.Println(incomingTime)
 
 		if incomingNetworkLayer := incomingPacket.NetworkLayer(); incomingNetworkLayer != nil {
 			incomingNetworkLayerContents = incomingNetworkLayer.LayerContents()
@@ -135,9 +135,9 @@ func (client Client) AddRawTrainPacket(transport string, allowBlock bool, conn R
 		var outgoingPayload []byte
 		var outgoingTime = outgoingPacket.Metadata().CaptureInfo.Timestamp.UnixNano() / 1000000
 
-		fmt.Println(outgoingNetworkLayerContents)
-		fmt.Println(outgoingTransportLayerContents)
-		fmt.Println(outgoingTime)
+		//fmt.Println(outgoingNetworkLayerContents)
+		//fmt.Println(outgoingTransportLayerContents)
+		//fmt.Println(outgoingTime)
 
 		if outgoingNetworkLayer := outgoingPacket.NetworkLayer(); outgoingNetworkLayer != nil {
 			outgoingNetworkLayerContents = outgoingNetworkLayer.LayerContents()
@@ -178,8 +178,8 @@ func (client Client) AddTrainPacket(transport string, allowBlock bool, conn Conn
 	var incomingPayload []byte
 	var incomingTime = incomingPacket.Metadata().CaptureInfo.Timestamp.UnixNano() / 1000000
 
-	fmt.Println(incomingPayload)
-	fmt.Println(incomingTime)
+	//fmt.Println(incomingPayload)
+	//fmt.Println(incomingTime)
 
 	if incomingNetworkLayer := incomingPacket.NetworkLayer(); incomingNetworkLayer != nil {
 		incomingNetworkLayerContents = incomingNetworkLayer.LayerContents()
@@ -195,12 +195,12 @@ func (client Client) AddTrainPacket(transport string, allowBlock bool, conn Conn
 
 	_, createErr := rethinkdb.DBCreate(transport).RunWrite(client.session)
 	if createErr == nil {
-		fmt.Println("Created database", transport)
+		fmt.Println("-> Created database", transport)
 	}
 
 	_, tableCreateErr := rethinkdb.DB(transport).TableCreate(packetsKey).RunWrite(client.session)
 	if tableCreateErr == nil {
-		fmt.Println("Created table", transport, packetsKey)
+		fmt.Println("-> Created table", transport, packetsKey)
 	}
 
 	connValue = RawPacket{
@@ -227,8 +227,8 @@ func (client Client) AddTrainPacket(transport string, allowBlock bool, conn Conn
 		var outgoingPayload []byte
 		var outgoingTime = outgoingPacket.Metadata().CaptureInfo.Timestamp.UnixNano() / 1000000
 
-		fmt.Println(outgoingPayload)
-		fmt.Println(outgoingTime)
+		//fmt.Println(outgoingPayload)
+		//fmt.Println(outgoingTime)
 
 		if outgoingNetworkLayer := outgoingPacket.NetworkLayer(); outgoingNetworkLayer != nil {
 			outgoingNetworkLayerContents = outgoingNetworkLayer.LayerContents()

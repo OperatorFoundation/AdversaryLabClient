@@ -151,11 +151,11 @@ func capture(transport string, port string, allowBlockChannel chan bool, allowBl
 
 	lab, connectErr := protocol.Connect()
 	if connectErr != nil {
-		fmt.Println("Connect error!", connectErr)
+		fmt.Println("-> Connect error!", connectErr.Error())
 		return
 	}
 
-	fmt.Println("Connected.")
+	fmt.Println("-> Connected.")
 
 	captured := map[Connection]protocol.ConnectionPackets{}
 	rawCaptured := map[Connection]protocol.RawConnectionPackets{}
