@@ -283,8 +283,6 @@ func readPackets(packetSource *gopacket.PacketSource, packetChannel chan gopacke
 
 
 func recordRawPacket(packet gopacket.Packet, captured map[Connection]protocol.RawConnectionPackets, port layers.TCPPort) {
-
-	fmt.Println("Entered recordRawPacket")
 	tcpLayer := packet.Layer(layers.LayerTypeTCP)
 	if tcpLayer != nil {
 		tcp, _ := tcpLayer.(*layers.TCP)
